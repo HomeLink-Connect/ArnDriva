@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ArnDrive</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<!-- FIRESTORE RULES (paste in Firebase console > Firestore > Rules):
+rules_version='2';service cloud.firestore{match /databases/{d}/documents{
+ match /users/{u}{allow read:if request.auth!=null;allow write:if request.auth.uid==u;}
+ match /rides/{r}{allow read:if request.auth!=null;
+  allow create:if request.auth.uid==request.resource.data.pax;
+  allow update:if request.auth!=null;
+  match /offers/{o}{allow read:if request.auth!=null;allow write:if request.auth.uid==o;}}}}
+-->
+<style>
+*{box-sizing:border-box;margin:0}
+[hidden]{display:none!important}
+body{font-family:Inter,system-ui,sans-serif;color:#1a1a1a;height:100vh;height:100dvh;overflow:hidden;background:#eee}
+#map{position:absolute;inset:0}
+#bar{position:absolute;top:calc(12px + env(safe-area-inset-top));left:12px;right:12px;z-index:500;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+.pill{pointer-events:auto;background:#fff;border:0;border-radius:99px;padding:10px 16px;font:600 14px Inter,sans-serif;box-shadow:0 2px 12px #0003}
+.logo{font-weight:800;font-size:30px;letter-spacing:-1px}.logo span{background:#1a1a1a;color:#c1f11d;padding:0 8px;border-radius:10px;margin-left:3px}
+#sheet{position:absolute;left:0;right:0;bottom:0;z-index:600;background:#fff;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:70vh;overflow:auto;box-shadow:0 -4px 24px #0003}
+#sheet:empty{display:none}
+h3{font-size:20px;font-weight:800}
+.row{display:flex;gap:10px;justify-content:space-between;align-items:center;margin:10px 0}
+.m{color:#777;font-size:14px;margin:6px 0}
+.btn{display:block;width:100%;text-align:center;text-decoration:none;background:#c1f11d;color:#1a1a1a;border:0;border-radius:14px;padding:15px;font:800 16px Inter,sans-serif;cursor:pointer}
+.btn.d{background:#1a1a1a;color:#fff}.btn.s{padding:10px 14px;width:auto;font-size:14px}
+.lnk{background:none;border:0;color:#d33;font:600 14px Inter,sans-serif;width:100%;padding:12px;cursor:pointer}
+.card{background:#f4f4f4;border-radius:16px;padding:12px;margin:8px 0}
+.f{display:flex;align-items:center;gap:10px;background:#f4f4f4;border-radius:14px;padding:0 14px;margin:8px 0}
+.f input{flex:1;border:0;background:none;padding:14px 0;font:600 16px Inter,sans-serif;outline:0;min-width:0}
+.f i{width:10px;height:10px;border-radius:50%;background:#1a1a1a}.f i.b{background:#9bc800}
+.it{padding:12px 6px;border-bottom:1px solid #eee;font-size:15px;cursor:pointer}
+.pc{display:flex;align-items:center;gap:8px;margin:10px 0}
+.pc button{width:48px;height:48px;border:0;border-radius:14px;background:#f4f4f4;font-size:24px;font-weight:800;cursor:pointer}
+.pc input{flex:1;min-width:0;text-align:center;font:800 28px Inter,sans-serif;border:0;background:none;outline:0}
+.pr{font-weight:800;font-size:20px}
+.dot{width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px #0006}
+.car{font-size:26px;filter:drop-shadow(0 2px 3px #0008)}
+.st{display:flex;justify-content:center;gap:6px;margin:14px 0}.st button{font-size:34px;background:none;border:0;cursor:pointer}
+#auth{position:fixed;inset:0;z-index:1000;background:#c1f11d;overflow:auto;padding:calc(30px + env(safe-area-inset-top)) 22px 30px;display:flex;flex-direction:column;gap:10px}
+#auth input,#auth select{width:100%;border:0;border-radius:14px;padding:15px;font:600 16px Inter,sans-serif;background:#fff}
+#auth .logo{font-size:44px;margin-top:20px}#auth p{font-weight:600;margin-bottom:14px}
+#err{color:#b00020;font-weight:600;font-size:14px;min-height:18px}
+</style></head><body>
+<div id="map"></div>
+<div id="bar" hidden><span class="logo" style="font-size:22px;pointer-events:auto">Arn<span>Drive</span></span><button class="pill" id="who" onclick="auth.signOut()"></button></div>
+<div id="sheet"></div>
+<div id="auth">
+ <div class="logo">Arn<span>Drive</span></div>
+ <p>Name your fare. Ride anywhere in Zimbabwe.</p>
+ <div id="su" hidden style="display:flex;flex-direction:column;gap:10px">
+  <input id="nm" placeholder="Full name" autocomplete="name">
+  <input id="ph" placeholder="Phone (e.g. 0771234567)" type="tel" autocomplete="tel">
+  <select id="role" onchange="$('#dv').hidden=this.value!=='driver'"><option value="passenger">I need rides</option><option value="driver">I drive</option></select>
+  <div id="dv" hidden style="display:flex;flex-direction:column;gap:10px"><input id="car" placeholder="Car (e.g. White Honda Fit)"><input id="pl" placeholder="Number plate"></div>
+ </div>
+ <input id="em" type="email" placeholder="Email" autocomplete="email">
+ <input id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password">
+ <div id="err"></div>
+ <button class="btn d" id="go" onclick="go()">Sign in</button>
+ <button class="lnk" style="color:#1a1a1a" id="tg" onclick="tgl()">New here? Create account</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// 1) PASTE YOUR FIREBASE WEB CONFIG HERE
+firebase.initializeApp({
+  apiKey: "AIzaSyCxHHRKO6D_-qVK1oqEQCKSCXkoAEuvJO4",
+  authDomain: "arndrive-423b1.firebaseapp.com",
+  databaseURL: "https://arndrive-423b1-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "arndrive-423b1",
+  storageBucket: "arndrive-423b1.firebasestorage.app",
+  messagingSenderId: "594530032327",
+  appId: "1:594530032327:web:2073fe4286a9ff6728bce2"
+});
+const auth=firebase.auth(),db=firebase.firestore(),TS=()=>firebase.firestore.FieldValue.serverTimestamp();
+const $=s=>document.querySelector(s),sh=h=>{$('#sheet').innerHTML=h};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+let me,ride,here,drop,km=0,mins=0,sug=0,line,R=[],O={},RQ=[],SENT={},U=[],offU,openU,W,online=false,mode='in',sg=0,tm;
+const map=L.map('map',{zoomControl:false}).setView([-17.8292,31.0522],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
+const dot=c=>L.divIcon({className:'',html:`<div class="dot" style="background:${c}"></div>`,iconSize:[18,18],iconAnchor:[9,9]});
+const carI=L.divIcon({className:'',html:'<div class="car">🚕</div>',iconSize:[30,30],iconAnchor:[15,15]});
+const M={};
+const put=(k,ll,ic)=>{if(M[k])M[k].setLatLng(ll);else M[k]=L.marker(ll,{icon:ic}).addTo(map)};
+const clr=()=>{for(const k in M){M[k].remove();delete M[k]}if(line){line.remove();line=null}};
+const hv=(a,b)=>{const r=Math.PI/180,x=Math.sin((b.lat-a.lat)*r/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin((b.lng-a.lng)*r/2)**2;return 12742*Math.asin(Math.sqrt(x))};
+const fit=a=>{try{map.fitBounds(a,{padding:[70,70]})}catch{}};
+async function rev(ll){try{const j=await(await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${ll.lat}&lon=${ll.lng}`)).json();return(j.display_name||'').split(',').slice(0,2).join(',')||'Dropped pin'}catch{return'Dropped pin'}}
+
+/* ---------- AUTH ---------- */
+function tgl(){mode=mode==='in'?'up':'in';$('#su').hidden=mode==='in';$('#su').style.display=mode==='in'?'none':'flex';$('#go').textContent=mode==='in'?'Sign in':'Create account';$('#tg').textContent=mode==='in'?'New here? Create account':'Have an account? Sign in';$('#err').textContent=''}
+async function go(){
+ const e=$('#em').value.trim(),p=$('#pw').value;$('#err').textContent='';
+ try{
+  if(mode==='in'){await auth.signInWithEmailAndPassword(e,p);return}
+  const d={name:$('#nm').value.trim(),phone:$('#ph').value.trim(),role:$('#role').value,car:$('#car').value.trim(),plate:$('#pl').value.trim().toUpperCase(),created:TS()};
+  if(!d.name||!d.phone)throw Error('Enter your name and phone number.');
+  if(d.role==='driver'&&(!d.car||!d.plate))throw Error('Drivers must enter car and number plate.');
+  sg=1;const c=await auth.createUserWithEmailAndPassword(e,p);
+  await db.collection('users').doc(c.user.uid).set(d);me={...d,uid:c.user.uid};sg=0;boot();
+ }catch(x){sg=0;$('#err').textContent=String(x.message).replace('Firebase: ','')}
+}
+auth.onAuthStateChanged(async u=>{
+ if(sg)return;
+ if(!u){clean();me=null;$('#auth').hidden=false;$('#bar').hidden=true;sh('');clr();return}
+ const s=await db.collection('users').doc(u.uid).get();
+ if(!s.exists){auth.signOut();return}
+ me={...s.data(),uid:u.uid};boot();
+});
+function clean(){U.forEach(f=>f());U=[];offU&&offU();offU=null;openU&&openU();openU=null;if(W){navigator.geolocation.clearWatch(W);W=null}ride=null;online=false}
+function boot(){
+ clean();$('#auth').hidden=true;$('#bar').hidden=false;$('#who').textContent=me.name+' · Sign out';
+ me.role==='driver'?driverUI():paxUI();
+}
+
+/* ---------- PASSENGER ---------- */
+function paxUI(){
+ navigator.geolocation.getCurrentPosition(async p=>{here={lat:p.coords.latitude,lng:p.coords.longitude};map.setView(here,15);put('p',here,dot('#1a1a1a'));const n=await rev(here);here.name=n;const k=$('#pk');if(k)k.value=n},()=>{},{enableHighAccuracy:true});
+ map.off('click').on('click',e=>{if(me.role==='passenger'&&!ride&&$('#ds'))pin(e.latlng)});
+ U.push(db.collection('rides').where('pax','==',me.uid).where('active','==',true).onSnapshot(s=>{ride=s.empty?null:{id:s.docs[0].id,...s.docs[0].data()};paxView()}));
+}
+function paxView(){
+ offU&&offU();offU=null;clr();const r=ride;
+ if(!r){drop=null;if(here)put('p',here,dot('#1a1a1a'));return sh(`<h3>Where to?</h3>
+  <div class="f"><i></i><input id="pk" readonly value="${esc(here&&here.name||'Finding you…')}"></div>
+  <div class="f"><i class="b"></i><input id="ds" placeholder="Search destination or tap the map" autocomplete="off" oninput="srch(this.value)"></div>
+  <div id="res"></div><div id="fare"></div>`)}
+ put('p',[r.pickup.lat,r.pickup.lng],dot('#1a1a1a'));put('d',[r.drop.lat,r.drop.lng],dot('#9bc800'));
+ if(r.status==='open'){
+  sh(`<div class="row"><h3>Finding drivers…</h3><span class="pr">$${(+r.price).toFixed(2)}</span></div>
+  <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)} · ${r.km} km</p>
+  <div class="row"><button class="btn d s" onclick="bump(-.5)">−$0.50</button><button class="btn s" onclick="bump(.5)">Raise fare +$0.50</button></div>
+  <div id="offers"><p class="m">Waiting for driver offers…</p></div><button class="lnk" onclick="cancel()">Cancel request</button>`);
+  offU=db.collection('rides').doc(r.id).collection('offers').onSnapshot(s=>{
+   O={};s.forEach(d=>O[d.id]=d.data());const a=Object.entries(O).sort((x,y)=>x[1].price-y[1].price);
+   $('#offers').innerHTML=a.length?a.map(([id,o])=>`<div class="card"><div class="row" style="margin:0"><div><b>${esc(o.name)}</b><br><span class="m">${esc(o.car)} · ${esc(o.plate)}</span></div><span class="pr">$${(+o.price).toFixed(2)}</span></div><button class="btn" style="margin-top:8px" onclick="acc('${id}')">Accept</button></div>`).join(''):'<p class="m">Waiting for driver offers…</p>'});
+  return;
+ }
+ if(r.status==='done')return sh(`<h3>You've arrived</h3><p class="m">Pay the driver $${(+r.price).toFixed(2)} in cash. How was your ride?</p><div class="st">${[1,2,3,4,5].map(n=>`<button onclick="rate(${n})">⭐</button>`).join('')}</div><button class="lnk" style="color:#777" onclick="rate(0)">Skip</button>`);
+ const T={accepted:'Your driver is on the way',arrived:'Your driver has arrived',ongoing:'Enjoy your trip'};
+ if(r.dLoc)put('c',[r.dLoc.lat,r.dLoc.lng],carI);
+ sh(`<div class="row"><h3>${T[r.status]||''}</h3><span class="pr">$${(+r.price).toFixed(2)}</span></div>
+ <div class="card"><b>${esc(r.driverName)}</b><br><span class="m">${esc(r.driverCar)} · ${esc(r.driverPlate)}</span></div>
+ <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)}</p>
+ <div class="row"><a class="btn d" href="tel:${esc(r.driverPhone)}">Call driver</a></div>${r.status!=='ongoing'?'<button class="lnk" onclick="cancel()">Cancel ride</button>':''}`);
+}
+let srT;function srch(v){clearTimeout(tm);if(v.length<3){$('#res').innerHTML='';return}tm=setTimeout(async()=>{try{R=await(await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=zw&limit=5&q=${encodeURIComponent(v)}`)).json();$('#res').innerHTML=R.length?R.map((r,i)=>`<div class="it" onclick="pickR(${i})">${esc(r.display_name.split(',').slice(0,3).join(','))}</div>`).join(''):'<p class="m">No results. Tap the map to drop a pin.</p>'}catch{}},500)}
+function pickR(i){const r=R[i],n=r.display_name.split(',').slice(0,2).join(',');$('#ds').value=n;$('#res').innerHTML='';setDrop({lat:+r.lat,lng:+r.lon},n)}
+async function pin(ll){$('#ds').value='Finding address…';const n=await rev(ll);$('#ds').value=n;$('#res').innerHTML='';setDrop(ll,n)}
+async function setDrop(ll,name){
+ if(!here)return alert('Allow location access so we can find your pickup point.');
+ drop={lat:ll.lat,lng:ll.lng,name};put('d',[ll.lat,ll.lng],dot('#9bc800'));$('#fare').innerHTML='<p class="m">Calculating route…</p>';
+ try{
+  const j=await(await fetch(`https://router.project-osrm.org/route/v1/driving/${here.lng},${here.lat};${ll.lng},${ll.lat}?overview=full&geometries=geojson`)).json(),rt=j.routes[0];
+  km=rt.distance/1000;mins=Math.round(rt.duration/60);if(line)line.remove();
+  line=L.geoJSON(rt.geometry,{style:{color:'#1a1a1a',weight:5}}).addTo(map);fit(line.getBounds());
+ }catch{km=hv(here,ll)*1.3;mins=Math.round(km*2.5)}
+ sug=Math.max(1.5,Math.round((1+.5*km)*2)/2);
+ $('#fare').innerHTML=`<div class="row"><span class="m">${km.toFixed(1)} km · about ${mins} min</span><span class="m">Suggested $${sug.toFixed(2)}</span></div>
+ <div class="pc"><button onclick="adj(-.5)">−</button><b style="font-size:24px">$</b><input id="pr" type="number" step=".5" min="1" value="${sug.toFixed(2)}"><button onclick="adj(.5)">+</button></div>
+ <p class="m">Offer a fair price: drivers can accept it or counter. Pay cash.</p><button class="btn" onclick="req()">Find a driver</button>`;
+}
+const adj=d=>{const i=$('#pr');i.value=Math.max(1,+i.value+d).toFixed(2)};
+async function req(){
+ const price=+$('#pr').value;if(!(price>0)||!drop||!here)return;
+ await db.collection('rides').add({pax:me.uid,paxName:me.name,paxPhone:me.phone,pickup:{lat:here.lat,lng:here.lng,name:here.name||'Pickup'},drop,km:+km.toFixed(1),price,status:'open',active:true,created:TS()});
+}
+const bump=d=>db.collection('rides').doc(ride.id).update({price:Math.max(1,+ride.price+d)});
+const acc=id=>{const o=O[id];db.collection('rides').doc(ride.id).update({status:'accepted',driver:o.driver,driverName:o.name,driverPhone:o.phone,driverCar:o.car,driverPlate:o.plate,price:o.price})};
+const cancel=()=>confirm('Cancel this ride?')&&db.collection('rides').doc(ride.id).update({status:'cancelled',active:false});
+const rate=n=>db.collection('rides').doc(ride.id).update({rating:n,active:false});
+
+/* ---------- DRIVER ---------- */
+function driverUI(){
+ let t=0,first=1;
+ W=navigator.geolocation.watchPosition(p=>{here={lat:p.coords.latitude,lng:p.coords.longitude};if(first){first=0;map.setView(here,14)}put('me',here,carI);
+  if(ride&&ride.status!=='done'&&Date.now()-t>4000){t=Date.now();db.collection('rides').doc(ride.id).update({dLoc:here})}},()=>alert('Turn on location to drive with ArnDrive.'),{enableHighAccuracy:true});
+ U.push(db.collection('rides').where('driver','==',me.uid).where('active','==',true).onSnapshot(s=>{ride=s.empty?null:{id:s.docs[0].id,...s.docs[0].data()};drvView()}));
+}
+function drvView(){
+ openU&&openU();openU=null;
+ for(const k in M)if(k!=='me'){M[k].remove();delete M[k]}if(line){line.remove();line=null}
+ if(!ride||ride.status==='done')return drvIdle();
+ const r=ride,toP=r.status==='accepted'||r.status==='arrived',tgt=toP?r.pickup:r.drop;
+ put('p',[r.pickup.lat,r.pickup.lng],dot('#1a1a1a'));put('d',[r.drop.lat,r.drop.lng],dot('#9bc800'));
+ const nx={accepted:['I have arrived','arrived'],arrived:['Start trip','ongoing'],ongoing:['Complete trip','done']}[r.status];
+ sh(`<div class="row"><h3>${toP?'Pick up '+esc(r.paxName):'Trip in progress'}</h3><span class="pr">$${(+r.price).toFixed(2)}</span></div>
+ <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)} · ${r.km} km</p>
+ <div class="row"><a class="btn d" href="tel:${esc(r.paxPhone)}">Call</a><a class="btn d" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${tgt.lat},${tgt.lng}">Navigate</a></div>
+ <button class="btn" onclick="step('${nx[1]}')">${nx[0]}</button>${toP?'<button class="lnk" onclick="dcancel()">Cancel pickup</button>':''}`);
+}
+const step=s=>db.collection('rides').doc(ride.id).update({status:s});
+const dcancel=()=>confirm('Cancel this pickup? The request goes back to other drivers.')&&db.collection('rides').doc(ride.id).update({status:'open',driver:null,driverName:null,driverPhone:null,driverCar:null,driverPlate:null,dLoc:null});
+const tog=()=>{online=!online;drvIdle()};
+function drvIdle(){
+ openU&&openU();openU=null;
+ sh(`<div class="row"><h3>${online?'You are online':'You are offline'}</h3><button class="btn s ${online?'d':''}" onclick="tog()">${online?'Go offline':'Go online'}</button></div><div id="reqs">${online?'<p class="m">Looking for ride requests…</p>':'<p class="m">Go online to see passengers near you.</p>'}</div>`);
+ if(!online)return;
+ openU=db.collection('rides').where('status','==','open').onSnapshot(s=>{
+  RQ=s.docs.map(d=>({id:d.id,...d.data()})).map(r=>({...r,d:here?hv(here,r.pickup):0})).sort((a,b)=>a.d-b.d);drawReqs()});
+}
+function drawReqs(){
+ const box=$('#reqs');if(!box||(document.activeElement&&box.contains(document.activeElement)))return;
+ for(const k in M)if(k[0]==='r'){M[k].remove();delete M[k]}
+ RQ.forEach(r=>put('r'+r.id,[r.pickup.lat,r.pickup.lng],dot('#c1f11d')));
+ box.innerHTML=RQ.length?RQ.map(r=>`<div class="card"><div class="row" style="margin:0"><b>${esc(r.paxName)}</b><span class="pr">$${(+r.price).toFixed(2)}</span></div>
+ <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)}<br>${r.km} km trip · ${r.d.toFixed(1)} km from you</p>
+ ${SENT[r.id]?`<p class="m"><b>Offer of $${(+SENT[r.id]).toFixed(2)} sent. Waiting for passenger…</b></p>`:`<button class="btn" onclick="offer('${r.id}',${r.price})">Accept $${(+r.price).toFixed(2)}</button>
+ <div class="pc" style="margin-bottom:0"><input id="c${r.id}" type="number" step=".5" min="1" placeholder="Your price" style="background:#fff;border-radius:12px;height:46px;font-size:18px"><button class="btn d s" onclick="offer('${r.id}',+$('#c${r.id}').value)">Counter</button></div>`}</div>`).join(''):'<p class="m">No requests right now. They appear here instantly.</p>';
+}
+async function offer(id,price){
+ if(!(price>0))return;
+ await db.collection('rides').doc(id).collection('offers').doc(me.uid).set({driver:me.uid,name:me.name,phone:me.phone,car:me.car,plate:me.plate,price,ts:TS()});
+ SENT[id]=price;drawReqs();
+}
+</script>
+</body></html>
