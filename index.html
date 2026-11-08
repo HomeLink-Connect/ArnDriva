@@ -1,75 +1,187 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b1b1b">
 <title>ArnDrive</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<!-- FIRESTORE RULES (paste in Firebase console > Firestore > Rules):
+<!-- FIRESTORE RULES (Firebase console > Firestore > Rules):
 rules_version='2';service cloud.firestore{match /databases/{d}/documents{
  match /users/{u}{allow read:if request.auth!=null;allow write:if request.auth.uid==u;}
  match /rides/{r}{allow read:if request.auth!=null;
   allow create:if request.auth.uid==request.resource.data.pax;
-  allow update:if request.auth!=null;
+  allow update:if request.auth!=null&&(request.auth.uid==resource.data.pax||request.auth.uid==resource.data.driver||resource.data.status=='open');
   match /offers/{o}{allow read:if request.auth!=null;allow write:if request.auth.uid==o;}}}}
 -->
 <style>
-*{box-sizing:border-box;margin:0}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
-body{font-family:Inter,system-ui,sans-serif;color:#1a1a1a;height:100vh;height:100dvh;overflow:hidden;background:#eee}
-#map{position:absolute;inset:0}
-#bar{position:absolute;top:calc(12px + env(safe-area-inset-top));left:12px;right:12px;z-index:500;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
-.pill{pointer-events:auto;background:#fff;border:0;border-radius:99px;padding:10px 16px;font:600 14px Inter,sans-serif;box-shadow:0 2px 12px #0003}
+:root{--acc:#c1f11d;--lime:var(--acc);--accT:#111;--accX:#c1f11d;--bg:#1b1b1b;--bgS:#1b1b1b;--bg0:#111;--card:#2b2b2c;--card2:#262627;--line:#3a3a3c;--line2:#2c2c2c;--tx:#fff;--mut:#9a9a9f;--fab:#2a2a2a;--top:#111;--btnd:#3a3a3c;--sel:#1f2f86;--selb:#3b4fd6;--pinbg:#fff;--pinfg:#111;--tgb:#1c2a05;--danger:#ff6b6b;--knob:#111;--swoff:#3a3a3c;--ph:#888;--authbg:#c1f11d;--authT:#111;--authI:#fff;--authIT:#111;--authB:#111;--authBT:#fff;--shadow:#0008;--ava:#444;--circ:#333}
+body{font-family:Inter,system-ui,sans-serif;color:var(--tx);height:100vh;height:100dvh;overflow:hidden;background:var(--bg0)}
+#map,#emb{position:absolute;inset:0;width:100%;height:100%}
+#emb{border:0}
+body:not(.light) #emb{filter:invert(.92) hue-rotate(180deg) contrast(.92) saturate(.8)}
+body.emb #pin .ic,body.emb #pin .st,body.emb .mapbtn{display:none}
+button,input,select{font-family:inherit}
+svg[fill="#fff"]{fill:var(--tx)}svg[stroke="#fff"]{stroke:var(--tx)}
+#top svg [fill]{fill:var(--tx)}#top svg [stroke]{stroke:var(--tx)}
+#pin .ic svg [fill]{fill:var(--pinfg)}#pin .ic svg [stroke]{stroke:var(--pinfg)}
+body.light svg.car{filter:drop-shadow(0 0 1px #777)}
 .logo{font-weight:800;font-size:30px;letter-spacing:-1px}.logo span{background:#1a1a1a;color:#c1f11d;padding:0 8px;border-radius:10px;margin-left:3px}
-#sheet{position:absolute;left:0;right:0;bottom:0;z-index:600;background:#fff;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:70vh;overflow:auto;box-shadow:0 -4px 24px #0003}
+#menu{position:absolute;top:calc(12px + env(safe-area-inset-top));left:12px;z-index:500;width:52px;height:52px;border-radius:50%;background:var(--fab);border:0;color:var(--tx);font-size:24px;box-shadow:0 2px 12px var(--shadow)}
+#loc{position:absolute;right:14px;z-index:500;width:52px;height:52px;border-radius:50%;background:var(--fab);border:0;box-shadow:0 2px 12px var(--shadow);display:flex;align-items:center;justify-content:center}
+#top{position:absolute;top:calc(12px + env(safe-area-inset-top));left:12px;right:12px;z-index:500;background:var(--top);border-radius:20px;padding:6px 14px;box-shadow:0 2px 14px var(--shadow)}
+#top .tr{display:flex;align-items:center;gap:12px;padding:11px 0;font-weight:600;font-size:16px}
+#top .tr+.tr{border-top:1px solid var(--line2)}
+#top .tr b{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#top .tr small{color:var(--mut);font-weight:600}
+svg.i{width:26px;height:26px;flex:none}
+#pin{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);z-index:400;pointer-events:none;display:flex;flex-direction:column;align-items:center}
+#pin .lbl{background:var(--top);border-radius:12px;padding:7px 12px;margin-bottom:8px;box-shadow:0 2px 10px var(--shadow);white-space:nowrap;max-width:76vw;overflow:hidden;text-overflow:ellipsis}
+#pin small{display:block;color:var(--mut);font-size:12px;font-weight:600}#pin b{font-size:15px}
+#pin .ic{width:44px;height:44px;border-radius:13px;background:var(--pinbg);display:flex;align-items:center;justify-content:center}
+#pin .st{width:3px;height:14px;background:var(--pinbg)}
+#sheet{position:absolute;left:0;right:0;bottom:0;z-index:600;background:var(--bg);border-radius:22px 22px 0 0;padding:20px 14px calc(14px + env(safe-area-inset-bottom));max-height:78vh;overflow:visible;box-shadow:0 -4px 24px var(--shadow)}
 #sheet:empty{display:none}
-h3{font-size:20px;font-weight:800}
+#sheet::before{content:"";position:absolute;top:8px;left:50%;width:46px;height:5px;margin-left:-23px;border-radius:9px;background:var(--line)}
+#sheet .sc{max-height:calc(78vh - 40px);overflow:auto}
+.bk{position:absolute;top:-62px;left:12px;width:50px;height:50px;border-radius:50%;background:var(--fab);border:0;color:var(--tx);font-size:24px;box-shadow:0 2px 12px var(--shadow)}
+h3{font-size:21px;font-weight:800}
 .row{display:flex;gap:10px;justify-content:space-between;align-items:center;margin:10px 0}
-.m{color:#777;font-size:14px;margin:6px 0}
-.btn{display:block;width:100%;text-align:center;text-decoration:none;background:#c1f11d;color:#1a1a1a;border:0;border-radius:14px;padding:15px;font:800 16px Inter,sans-serif;cursor:pointer}
-.btn.d{background:#1a1a1a;color:#fff}.btn.s{padding:10px 14px;width:auto;font-size:14px}
-.lnk{background:none;border:0;color:#d33;font:600 14px Inter,sans-serif;width:100%;padding:12px;cursor:pointer}
-.card{background:#f4f4f4;border-radius:16px;padding:12px;margin:8px 0}
-.f{display:flex;align-items:center;gap:10px;background:#f4f4f4;border-radius:14px;padding:0 14px;margin:8px 0}
-.f input{flex:1;border:0;background:none;padding:14px 0;font:600 16px Inter,sans-serif;outline:0;min-width:0}
-.f i{width:10px;height:10px;border-radius:50%;background:#1a1a1a}.f i.b{background:#9bc800}
-.it{padding:12px 6px;border-bottom:1px solid #eee;font-size:15px;cursor:pointer}
-.pc{display:flex;align-items:center;gap:8px;margin:10px 0}
-.pc button{width:48px;height:48px;border:0;border-radius:14px;background:#f4f4f4;font-size:24px;font-weight:800;cursor:pointer}
-.pc input{flex:1;min-width:0;text-align:center;font:800 28px Inter,sans-serif;border:0;background:none;outline:0}
+.m{color:var(--mut);font-size:14px;margin:6px 0;line-height:1.35}
+.btn{display:block;width:100%;text-align:center;text-decoration:none;background:var(--acc);color:var(--accT);border:0;border-radius:16px;padding:17px;font:800 18px Inter,sans-serif;cursor:pointer}
+.btn:active{opacity:.85}.btn.d{background:var(--btnd);color:var(--tx)}.btn.s{padding:11px 14px;width:auto;font-size:14px;border-radius:12px}
+.lnk{background:none;border:0;color:var(--danger);font:600 15px Inter,sans-serif;width:100%;padding:14px;cursor:pointer}
+.card{background:var(--card);border-radius:16px;padding:13px;margin:9px 0}
 .pr{font-weight:800;font-size:20px}
-.dot{width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px #0006}
-.car{font-size:26px;filter:drop-shadow(0 2px 3px #0008)}
-.st{display:flex;justify-content:center;gap:6px;margin:14px 0}.st button{font-size:34px;background:none;border:0;cursor:pointer}
-#auth{position:fixed;inset:0;z-index:1000;background:#c1f11d;overflow:auto;padding:calc(30px + env(safe-area-inset-top)) 22px 30px;display:flex;flex-direction:column;gap:10px}
-#auth input,#auth select{width:100%;border:0;border-radius:14px;padding:15px;font:600 16px Inter,sans-serif;background:#fff}
+.tabs{display:flex;gap:10px;margin:2px 0 12px}
+.tab{flex:1;background:var(--card);border-radius:14px;padding:8px 10px;border:2px solid transparent;color:var(--tx);text-align:left;font:600 14px Inter,sans-serif;cursor:pointer}
+.tab.on{background:var(--sel);border-color:var(--selb)}
+.tab svg{width:62px;height:26px;display:block;margin-bottom:4px}
+.tab .sub{float:right;opacity:.8}
+.where{display:flex;align-items:center;gap:12px;width:100%;background:var(--card);border:0;border-radius:16px;padding:17px 16px;color:var(--tx);font:800 19px Inter,sans-serif;text-align:left;cursor:pointer}
+.rec{display:flex;align-items:center;gap:14px;padding:14px 4px;font-weight:600;font-size:16px;cursor:pointer}
+.rec small{display:block;color:var(--mut);font-weight:600;font-size:14px}
+.rec svg{width:22px;height:22px;stroke:var(--mut);fill:none;stroke-width:2;flex:none}
+.rc{display:flex;align-items:center;gap:14px;background:var(--card2);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:10px}
+.rc svg.car{width:84px;height:36px;flex:none}
+.rc b{font-size:19px}.rc .g{color:var(--mut);font-weight:600}
+.pc{display:flex;align-items:center;gap:8px}
+.pc button{width:54px;height:54px;border:0;border-radius:50%;background:var(--circ);color:var(--tx);font-size:28px;font-weight:600;cursor:pointer}
+.pc .amt{flex:1;text-align:center;font-weight:800;font-size:24px}
+.pcw{background:var(--card2);border:1px solid var(--line);border-radius:20px;padding:8px;margin-bottom:10px}
+.auto{display:flex;align-items:center;gap:12px;padding:14px 6px;font-weight:600;font-size:16px;border-top:1px solid var(--line2);margin-top:4px}
+.auto span{flex:1}.auto svg.i{fill:var(--tx)}
+.sw{width:62px;height:34px;border-radius:99px;background:var(--swoff);border:0;position:relative;cursor:pointer;flex:none;transition:.15s}
+.sw::after{content:"";position:absolute;top:4px;left:4px;width:26px;height:26px;border-radius:50%;background:var(--knob);transition:.15s}
+.sw.on{background:var(--acc)}.sw.on::after{left:32px;background:var(--accT)}
+.fr{display:flex;align-items:center;gap:12px;margin-top:6px}
+.cash{width:34px;height:22px;border-radius:4px;background:#59b14e;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#0d3b0a}
+.opt{width:46px;height:46px;border:0;background:none;color:var(--tx);cursor:pointer}
+.opt svg{width:26px;height:26px;stroke:var(--tx);fill:none;stroke-width:2}
+.of{display:flex;gap:12px;align-items:center}
+.av{width:46px;height:46px;border-radius:50%;background:var(--ava);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex:none}
+.of .t{flex:1;min-width:0}.of .t b{display:block}
+.stars{display:flex;justify-content:center;gap:6px;margin:14px 0}.stars button{font-size:36px;background:none;border:0;cursor:pointer}
+.plate{display:inline-block;background:#fff;color:#111;border-radius:6px;padding:1px 8px;font-weight:800;font-size:13px;letter-spacing:1px;border:1px solid #bbb}
+.f{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:0 14px;margin:8px 0}
+.f input{flex:1;border:0;background:none;padding:15px 0;font:600 16px Inter,sans-serif;outline:0;min-width:0;color:var(--tx)}
+.f input::placeholder,.cin::placeholder{color:var(--ph)}
+.f svg{width:20px;height:20px;stroke:var(--mut);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.cin{background:var(--card);border:0;border-radius:12px;color:var(--tx);padding:12px;font:800 18px Inter,sans-serif;width:100%;outline:0}
+#srch,#set{position:fixed;inset:0;background:var(--bgS);overflow:auto;padding:calc(14px + env(safe-area-inset-top)) 14px 30px}
+#srch{z-index:900}#set{z-index:960}
+.hd{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.hd button{background:none;border:0;color:var(--tx);font-size:28px;padding:6px 10px;cursor:pointer}
+.dotb{width:12px;height:12px;border-radius:50%;background:var(--tx);flex:none}.dotl{width:12px;height:12px;border-radius:3px;background:var(--acc);flex:none}
+.mapbtn{display:flex;align-items:center;gap:12px;padding:15px 4px;font-weight:700;font-size:16px;cursor:pointer;border-bottom:1px solid var(--line2)}
+#dr{position:fixed;inset:0;z-index:950;background:#0009;display:flex}
+#dr .p{width:82%;max-width:340px;background:var(--bgS);padding:calc(26px + env(safe-area-inset-top)) 18px 20px;overflow:auto}
+#dr .p h3{margin-bottom:2px}.di{padding:16px 4px;font-weight:600;font-size:17px;border-bottom:1px solid var(--line2);cursor:pointer}
+#md{position:fixed;inset:0;z-index:990;background:#000a;display:flex;align-items:flex-end}
+#md .p{width:100%;background:var(--bg);border-radius:22px 22px 0 0;padding:20px 16px calc(18px + env(safe-area-inset-bottom));max-height:80vh;overflow:auto}
+#md .p .btn{margin-top:8px}
+#toast{position:fixed;left:50%;top:calc(80px + env(safe-area-inset-top));transform:translateX(-50%);z-index:999;background:var(--tx);color:var(--bg0);padding:12px 18px;border-radius:99px;font-weight:700;font-size:14px;box-shadow:0 4px 18px var(--shadow);max-width:90vw;text-align:center}
+.tg{background:var(--tgb);color:var(--accX);border-radius:8px;padding:2px 8px;font-size:12px;font-weight:800}
+.tg.x{background:color-mix(in srgb,var(--danger) 20%,transparent);color:var(--danger)}
+/* settings */
+.sec{font-weight:800;font-size:12px;color:var(--mut);letter-spacing:.9px;text-transform:uppercase;margin:22px 0 10px}
+.themes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.th{border:2px solid var(--line2);border-radius:16px;overflow:hidden;background:var(--card);cursor:pointer;padding:0;color:var(--tx);text-align:center;font:700 12.5px Inter,sans-serif}
+.th.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+.th .pv{height:62px;position:relative;display:block}
+.th .pv i{position:absolute;left:8px;right:8px;bottom:0;height:30px;border-radius:10px 10px 0 0}
+.th .pv b{position:absolute;left:16px;bottom:8px;width:44%;height:10px;border-radius:9px}
+.th .pv u{position:absolute;right:10px;top:10px;width:16px;height:16px;border-radius:50%}
+.th span.n{display:block;padding:8px 4px}
+.srow{display:flex;align-items:center;gap:12px;padding:14px 4px;border-bottom:1px solid var(--line2);font-weight:600}
+.srow span{flex:1}
+/* glass */
+body.glass #sheet,body.glass #top,body.glass #md .p,body.glass #pin .lbl,body.glass #menu,body.glass #loc,body.glass .bk,body.glass #dr .p{-webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);border:1px solid var(--line)}
+body.glass .btn.d,body.glass .pc button{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+/* auth */
+#auth{position:fixed;inset:0;z-index:1000;background:var(--authbg);color:var(--authT);overflow:auto;padding:calc(30px + env(safe-area-inset-top)) 22px 30px;display:flex;flex-direction:column;gap:10px}
+#auth .af{position:relative;color:var(--authIT)}
+#auth .af svg.ic{position:absolute;left:15px;top:50%;transform:translateY(-50%);width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.6;pointer-events:none}
+#auth input,#auth select{width:100%;border:0;border-radius:14px;padding:15px 15px 15px 46px;font:600 16px Inter,sans-serif;background:var(--authI);color:var(--authIT);outline:0}
+#auth input::placeholder{color:currentColor;opacity:.5}
+#auth .eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:0;padding:11px;cursor:pointer;color:var(--authIT);opacity:.6;display:flex}
+#auth .eye svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#auth input#pw{padding-right:48px}
 #auth .logo{font-size:44px;margin-top:20px}#auth p{font-weight:600;margin-bottom:14px}
+#auth .btn.d{background:var(--authB);color:var(--authBT)}#auth .lnk{color:var(--authT)}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;background:#fff;color:#1f1f1f;border:0;border-radius:14px;padding:15px;font:700 16px Inter,sans-serif;cursor:pointer;box-shadow:0 2px 10px #0002}
+.gbtn svg{width:22px;height:22px}
+.or{display:flex;align-items:center;gap:10px;font-weight:700;font-size:13px;opacity:.65;margin:4px 0}.or::before,.or::after{content:"";flex:1;height:1px;background:currentColor;opacity:.5}
 #err{color:#b00020;font-weight:600;font-size:14px;min-height:18px}
+body.dk-auth #err{color:#ff8a8a}
 </style></head><body>
 <div id="map"></div>
-<div id="bar" hidden><span class="logo" style="font-size:22px;pointer-events:auto">Arn<span>Drive</span></span><button class="pill" id="who" onclick="auth.signOut()"></button></div>
+<iframe id="emb" hidden title="Map" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+<button id="menu" hidden onclick="openMenu()">☰</button>
+<div id="top" hidden></div>
+<div id="pin" hidden><div class="lbl"><small id="pl">Pickup point</small><b id="pn">…</b></div><div class="ic" id="pic"></div><div class="st"></div></div>
+<button id="loc" hidden onclick="locate()"><svg class="i" viewBox="0 0 24 24" fill="#fff"><path d="M3 11l18-8-8 18-2-8z"/></svg></button>
 <div id="sheet"></div>
+<div id="srch" hidden>
+ <div class="hd"><button onclick="closeSearch()">←</button><h3>Your route</h3></div>
+ <div class="f"><span class="dotb"></span><input id="spk" placeholder="Pickup location" oninput="query(this.value,'pk')" onfocus="sf='pk'"></div>
+ <div class="f"><span class="dotl"></span><input id="sds" placeholder="Where to?" autocomplete="off" oninput="query(this.value,'ds')" onfocus="sf='ds'"></div>
+ <div class="mapbtn" onclick="chooseOnMap()"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 21s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>Choose on map</div>
+ <div id="sres"></div>
+</div>
+<div id="dr" hidden onclick="if(event.target===this)this.hidden=true"><div class="p" id="drp"></div></div>
+<div id="set" hidden><div class="hd"><button onclick="$('#set').hidden=true">←</button><h3>Settings</h3></div><div id="setb"></div></div>
+<div id="md" hidden onclick="if(event.target===this)mdClose(null)"><div class="p" id="mdp"></div></div>
 <div id="auth">
  <div class="logo">Arn<span>Drive</span></div>
- <p>Name your fare. Ride anywhere in Zimbabwe.</p>
+ <p id="atag">Name your fare. Ride anywhere in Zimbabwe.</p>
  <div id="su" hidden style="display:flex;flex-direction:column;gap:10px">
-  <input id="nm" placeholder="Full name" autocomplete="name">
-  <input id="ph" placeholder="Phone (e.g. 0771234567)" type="tel" autocomplete="tel">
-  <select id="role" onchange="$('#dv').hidden=this.value!=='driver'"><option value="passenger">I need rides</option><option value="driver">I drive</option></select>
-  <div id="dv" hidden style="display:flex;flex-direction:column;gap:10px"><input id="car" placeholder="Car (e.g. White Honda Fit)"><input id="pl" placeholder="Number plate"></div>
+  <div class="af"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><input id="nm" placeholder="Full name" autocomplete="name"></div>
+  <div class="af"><svg class="ic" viewBox="0 0 24 24"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 005 5L15 12l5 2v4a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-2z"/></svg><input id="ph" placeholder="Phone (e.g. 0771234567)" type="tel" autocomplete="tel"></div>
+  <div class="af"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.6 3-6 7-6s7 2.4 7 6"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14.5c2.4.6 4 2.4 4 5.5"/></svg><select id="role" onchange="$('#dv').hidden=this.value!=='driver'"><option value="passenger">I need rides</option><option value="driver">I drive</option></select></div>
+  <div id="dv" hidden style="display:flex;flex-direction:column;gap:10px"><div class="af"><svg class="ic" viewBox="0 0 24 24"><path d="M3 16v-4l2-5h14l2 5v4"/><path d="M3 16h18v3H3zM6 19v2M18 19v2"/><circle cx="7.5" cy="13.5" r=".8"/><circle cx="16.5" cy="13.5" r=".8"/></svg><input id="car" placeholder="Car (e.g. White Honda Fit)"></div><div class="af"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10.5h2M10 10.5h2M14 10.5h4M6 14h12"/></svg><input id="pl" placeholder="Number plate"></div></div>
  </div>
- <input id="em" type="email" placeholder="Email" autocomplete="email">
- <input id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password">
+ <div id="cred" style="display:flex;flex-direction:column;gap:10px">
+  <div class="af"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input id="em" type="email" placeholder="Email" autocomplete="email"></div>
+  <div class="af"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 018 0v3"/><circle cx="12" cy="15.5" r="1.2"/></svg><input id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><button class="eye" type="button" onclick="eye()" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+ </div>
  <div id="err"></div>
  <button class="btn d" id="go" onclick="go()">Sign in</button>
- <button class="lnk" style="color:#1a1a1a" id="tg" onclick="tgl()">New here? Create account</button>
+ <div id="alt" style="display:flex;flex-direction:column;gap:10px"><div class="or">or</div><button class="gbtn" onclick="gsign()"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Continue with Google</button></div>
+ <button class="lnk" id="tg" onclick="tgl()">New here? Create account</button>
+ <button class="lnk" id="fg" onclick="forgot()" style="font-size:13px">Forgot password?</button>
+ <button class="lnk" id="cx" hidden onclick="auth.signOut()">Cancel</button>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
-// 1) PASTE YOUR FIREBASE WEB CONFIG HERE
+/* ============ CONFIG ============
+ Google Maps key: in Google Cloud Console enable "Maps JavaScript API", "Places API (New)",
+ "Routes API" (and Geocoding API). Restrict the key to your website domain.
+ Using your Firebase key below works only if those APIs are enabled for that project. */
+const GMAPS_KEY="AIzaSyCxHHRKO6D_-qVK1oqEQCKSCXkoAEuvJO4";
 firebase.initializeApp({
   apiKey: "AIzaSyCxHHRKO6D_-qVK1oqEQCKSCXkoAEuvJO4",
   authDomain: "arndrive-423b1.firebaseapp.com",
@@ -80,145 +192,409 @@ firebase.initializeApp({
   appId: "1:594530032327:web:2073fe4286a9ff6728bce2"
 });
 const auth=firebase.auth(),db=firebase.firestore(),TS=()=>firebase.firestore.FieldValue.serverTimestamp();
-const $=s=>document.querySelector(s),sh=h=>{$('#sheet').innerHTML=h};
+const $=s=>document.querySelector(s),sh=h=>{$('#sheet').innerHTML=h?`<div class="sc">${h}</div>`:''};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
-let me,ride,here,drop,km=0,mins=0,sug=0,line,R=[],O={},RQ=[],SENT={},U=[],offU,openU,W,online=false,mode='in',sg=0,tm;
-const map=L.map('map',{zoomControl:false}).setView([-17.8292,31.0522],13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
-const dot=c=>L.divIcon({className:'',html:`<div class="dot" style="background:${c}"></div>`,iconSize:[18,18],iconAnchor:[9,9]});
-const carI=L.divIcon({className:'',html:'<div class="car">🚕</div>',iconSize:[30,30],iconAnchor:[15,15]});
-const M={};
-const put=(k,ll,ic)=>{if(M[k])M[k].setLatLng(ll);else M[k]=L.marker(ll,{icon:ic}).addTo(map)};
-const clr=()=>{for(const k in M){M[k].remove();delete M[k]}if(line){line.remove();line=null}};
-const hv=(a,b)=>{const r=Math.PI/180,x=Math.sin((b.lat-a.lat)*r/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin((b.lng-a.lng)*r/2)**2;return 12742*Math.asin(Math.sqrt(x))};
-const fit=a=>{try{map.fitBounds(a,{padding:[70,70]})}catch{}};
-async function rev(ll){try{const j=await(await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${ll.lat}&lon=${ll.lng}`)).json();return(j.display_name||'').split(',').slice(0,2).join(',')||'Dropped pin'}catch{return'Dropped pin'}}
+const money=n=>'$'+(+n).toFixed(2);
+const R_=db.collection('rides');
 
-/* ---------- AUTH ---------- */
+/* ============ ICONS ============ */
+const CAR=`<svg class="car" viewBox="0 0 120 50"><ellipse cx="60" cy="45" rx="52" ry="3.5" fill="#000" opacity=".35"/><path d="M5 35C5 29 11 27 21 25L35 15C39 12 46 10 54 10H76C85 10 91 14 97 21L109 25C115 26 117 30 117 35V39H5z" fill="#f2f2f2"/><path d="M33 25L42 16Q44 14 48 14H60V25zM64 14H76Q80 14 83 18L90 25H64z" fill="#46515c"/><path d="M5 35H117V39H5z" fill="#d6d6d6"/><circle cx="31" cy="38" r="9" fill="#1d1d1d"/><circle cx="31" cy="38" r="4" fill="#bbb"/><circle cx="92" cy="38" r="9" fill="#1d1d1d"/><circle cx="92" cy="38" r="4" fill="#bbb"/></svg>`;
+const PERSON='<circle cx="14" cy="9" r="5" fill="#111"/><path d="M4 25c0-7 4.5-10 10-10s10 3 10 10z" fill="#111"/>';
+const FLAG='<path d="M8 4v21M8 5h15l-3.5 5.5L23 16H8z" fill="#111" stroke="#111" stroke-width="2" stroke-linejoin="round"/>';
+const sq=inner=>`<svg viewBox="0 0 28 28" width="28" height="28" fill="none">${inner}</svg>`;
+const SQ=inner=>`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="54" viewBox="0 0 44 54"><rect x="2" y="2" width="40" height="40" rx="12" fill="${PIN.bg}"/><g transform="translate(8 8)">${inner.replace(/#111/g,PIN.fg)}</g><rect x="20.5" y="42" width="3" height="8" fill="${PIN.bg}"/><circle cx="22" cy="50" r="3" fill="${PIN.bg}"/></svg>`;
+const carTop=deg=>`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><g transform="rotate(${deg} 32 32)"><rect x="21" y="6" width="22" height="52" rx="10" fill="#fff" stroke="#7a7a7a" stroke-width="1.5"/><path d="M24 20h16l-2 8H26z" fill="#2b2f36"/><rect x="25" y="28" width="14" height="12" rx="3" fill="#e7e7e7"/><path d="M25 42h14l1 7H24z" fill="#2b2f36"/><rect x="22" y="9" width="4" height="3" rx="1.5" fill="#ffe68a"/><rect x="38" y="9" width="4" height="3" rx="1.5" fill="#ffe68a"/></g></svg>`;
+const svgI=(s,w,h,ax,ay)=>EMB||!window.google||!google.maps?null:({url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(s),scaledSize:new google.maps.Size(w,h),anchor:new google.maps.Point(ax,ay)});
+const pickI=()=>svgI(SQ(PERSON),44,54,22,50),dropI=()=>svgI(SQ(FLAG),44,54,22,50);
+const carI=d=>svgI(carTop(Math.round((d||0)/10)*10),52,52,26,26);
+const IC_PERSON=`<svg class="i" viewBox="0 0 28 28" fill="none">${PERSON.replace(/#111/g,'#fff')}</svg>`;
+const IC_FLAG=`<svg class="i" viewBox="0 0 28 28" fill="none">${FLAG.replace(/#111/g,'#fff')}</svg>`;
+const IC_CLOCK='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+const IC_PIN='<svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>';
+const IC_OPT='<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>';
+
+/* ============ STATE ============ */
+let map,me,ride,here,drop,rt,price=2,rtype='ride',auto=prefs().auto,note='',stage='idle',hadRide=false,prevSt=null;
+let U=[],offU,openU,W,online=false,mode='in',sg=0,O={},RQ=[],SENT={},DECL={},M={},poly,sf='ds',stok,sres=[],qt,lastD=null,fitted='',HIST=[],lastHead=0,prevPos=null,geo=new Set();
+
+/* ============ THEMES & PREFS ============ */
+let PIN={bg:'#fff',fg:'#111'},THEME_ID='dark';
+const lsG=k=>{try{return localStorage.getItem(k)}catch(e){return null}},lsS=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+function prefs(){try{return Object.assign({vib:true,auto:false},JSON.parse(lsG('ad_pref')||'{}'))}catch(e){return{vib:true,auto:false}}}
+const mkMap=(g,r,w,t,p,h,pk)=>[{elementType:'geometry',stylers:[{color:g}]},{elementType:'labels.text.fill',stylers:[{color:t}]},{elementType:'labels.text.stroke',stylers:[{color:g}]},{featureType:'administrative',elementType:'geometry',stylers:[{color:r}]},{featureType:'poi',elementType:'labels.text.fill',stylers:[{color:p}]},{featureType:'poi.park',elementType:'geometry',stylers:[{color:pk}]},{featureType:'road',elementType:'geometry',stylers:[{color:r}]},{featureType:'road',elementType:'geometry.stroke',stylers:[{color:g}]},{featureType:'road.highway',elementType:'geometry',stylers:[{color:h}]},{featureType:'transit',stylers:[{visibility:'off'}]},{featureType:'water',elementType:'geometry',stylers:[{color:w}]}];
+const LIGHTMAP=mkMap('#f1f1ee','#ffffff','#bfd9ee','#6b7280','#c2549a','#ffd98a','#d5e8cf');
+const mkT=(n,dark,o)=>({n,dark,glass:o.glass,map:o.map,prev:o.prev||o.bg0||o.bg,authDark:o.authDark,v:Object.assign({
+ '--bg':o.bg,'--bgS':o.bgS||o.bg,'--bg0':o.bg0||o.bg,'--card':o.card,'--card2':o.card2||o.card,
+ '--line':dark?'rgba(255,255,255,.14)':'rgba(0,0,0,.12)','--line2':dark?'rgba(255,255,255,.08)':'rgba(0,0,0,.08)',
+ '--tx':o.tx||(dark?'#fff':'#14161a'),'--mut':o.mut||(dark?'#a0a0a8':'#6b7280'),
+ '--fab':o.fab||o.card,'--top':o.top||o.bg,'--btnd':dark?'rgba(255,255,255,.14)':'rgba(0,0,0,.07)',
+ '--acc':o.acc,'--accT':o.accT||'#111','--accX':o.accX||o.acc,
+ '--sel':'color-mix(in srgb,'+o.acc+' 26%,transparent)','--selb':o.acc,'--tgb':'color-mix(in srgb,'+o.acc+' 18%,transparent)',
+ '--pinbg':dark?'#fff':'#16181d','--pinfg':dark?'#111':'#fff',
+ '--danger':dark?'#ff6b6b':'#d93025','--knob':dark?'#111':'#fff','--swoff':dark?'rgba(255,255,255,.2)':'#c9ccd1','--ph':dark?'#888':'#9aa0a6',
+ '--authbg':o.auth||o.acc,'--authT':o.authT||'#111','--authI':o.authI||'#fff','--authIT':o.authIT||'#111','--authB':o.authB||'#111','--authBT':o.authBT||'#fff',
+ '--shadow':dark?'#0008':'#0003','--ava':dark?'rgba(255,255,255,.18)':'#d5d8dd','--circ':dark?'rgba(255,255,255,.14)':'rgba(0,0,0,.08)'},o.v||{})});
+const THEMES={
+ dark:mkT('Dark',true,{bg:'#1b1b1b',bg0:'#111',card:'#2b2b2c',card2:'#262627',top:'#111',acc:'#c1f11d',v:{'--sel':'#1f2f86','--selb':'#3b4fd6','--tgb':'#1c2a05','--swoff':'#3a3a3c','--btnd':'#3a3a3c','--circ':'#333','--ava':'#444','--line':'#3a3a3c','--line2':'#2c2c2c'},map:mkMap('#212428','#38414f','#14171c','#8a8f98','#d58ab8','#4b5a73','#1e2a22')}),
+ white:mkT('White',false,{bg:'#ffffff',bg0:'#e9eaec',card:'#f1f2f4',card2:'#f7f7f8',top:'#ffffff',acc:'#c1f11d',accX:'#5b8200',map:LIGHTMAP}),
+ glass:mkT('Glassy',true,{bg:'rgba(22,26,46,.52)',bgS:'linear-gradient(160deg,#1c2340,#3a1f55)',bg0:'#14172a',card:'rgba(255,255,255,.11)',card2:'rgba(255,255,255,.08)',top:'rgba(22,26,46,.58)',fab:'rgba(30,34,56,.55)',acc:'#7df9ff',accT:'#06202a',auth:'linear-gradient(160deg,#4b6cff,#b24bf3)',authT:'#fff',authI:'rgba(255,255,255,.22)',authIT:'#fff',authB:'rgba(255,255,255,.28)',glass:true,authDark:true,prev:'linear-gradient(160deg,#4b6cff,#b24bf3)',map:mkMap('#1d2036','#3a3f6b','#101326','#aab0d8','#ff9bd5','#5560a0','#1d2a3a')}),
+ frost:mkT('Frost',false,{bg:'rgba(255,255,255,.6)',bgS:'linear-gradient(160deg,#e6f0ff,#fbe7ff)',bg0:'#dfe8f5',card:'rgba(255,255,255,.6)',card2:'rgba(255,255,255,.5)',top:'rgba(255,255,255,.68)',fab:'rgba(255,255,255,.7)',acc:'#3b82f6',accT:'#fff',accX:'#2563eb',auth:'linear-gradient(160deg,#a5c8ff,#f0b8ff)',authI:'rgba(255,255,255,.72)',glass:true,prev:'linear-gradient(160deg,#a5c8ff,#f0b8ff)',map:LIGHTMAP}),
+ midnight:mkT('Midnight',true,{bg:'#0e1630',bg0:'#080d1f',card:'#18224a',acc:'#4cc9f0',accT:'#06202a',authDark:true,authT:'#e8f6ff',authI:'#18224a',authIT:'#fff',authB:'#4cc9f0',authBT:'#06202a',auth:'#0e1630',map:mkMap('#0f1a3a','#243566','#070c20','#8da2d6','#7aa2ff','#3a54a0','#0f2a40')}),
+ ocean:mkT('Ocean',true,{bg:'#0b2a33',bg0:'#071c22',card:'#12404c',acc:'#2dd4bf',accT:'#042f2a',authDark:true,auth:'#0b2a33',authT:'#dffcf7',authI:'#12404c',authIT:'#fff',authB:'#2dd4bf',authBT:'#042f2a',map:mkMap('#0e3340','#1d5f70','#082229','#8fc9d1','#5eead4','#2b8a9e','#0f3d3a')}),
+ forest:mkT('Forest',true,{bg:'#14231a',bg0:'#0c1610',card:'#1f3827',acc:'#8bdc65',accT:'#0c1f08',authDark:true,auth:'#14231a',authT:'#eaffdf',authI:'#1f3827',authIT:'#fff',authB:'#8bdc65',authBT:'#0c1f08',map:mkMap('#18281d','#2f4a37','#0e1a14','#9bbba3','#b5e48c','#4c7a58','#1d3a24')}),
+ sunset:mkT('Sunset',true,{bg:'#2a1a1f',bg0:'#1b0f13',card:'#3e262c',acc:'#ff8a4c',accT:'#2b1204',authDark:true,auth:'linear-gradient(160deg,#ff8a4c,#c2255c)',authT:'#fff',authI:'rgba(255,255,255,.22)',authIT:'#fff',authB:'#2a1a1f',authBT:'#fff',prev:'linear-gradient(160deg,#ff8a4c,#c2255c)',map:mkMap('#2d1c22','#5a3a40','#1d1013','#cfa3a0','#ffb38a','#9a5a50','#33262a')}),
+ rose:mkT('Rose',false,{bg:'#fff7f9',bg0:'#f4e1e8',card:'#fde8ef',acc:'#ff5c8a',accT:'#fff',accX:'#d6336c',auth:'#ffb3c9',authT:'#3a0b1d',map:mkMap('#f6ece9','#ffffff','#cfe3f2','#8a6a70','#d6336c','#ffd1a8','#dfe9d2')}),
+ lavender:mkT('Lavender',false,{bg:'#f6f2ff',bg0:'#e6def9',card:'#ebe4fb',acc:'#8b5cf6',accT:'#fff',accX:'#6d3ae0',auth:'#cdbcfc',authT:'#1d0f44',map:mkMap('#efeaf8','#ffffff','#c9dbf2','#7a6c99','#8b5cf6','#ffe0a8','#d9e8d3')}),
+ neon:mkT('Neon',true,{bg:'#0a0a0f',bg0:'#050508',card:'#17171f',acc:'#00f5d4',accT:'#00201b',authDark:true,auth:'#0a0a0f',authT:'#00f5d4',authI:'#17171f',authIT:'#fff',authB:'#00f5d4',authBT:'#00201b',map:mkMap('#0b0b12','#2a2a45','#05050a','#8a8ac0','#ff2bd6','#3d3d7a','#0d1a1a')}),
+ gold:mkT('Luxury',true,{bg:'#14110a',bg0:'#0b0905',card:'#262012',acc:'#e6b800',accT:'#1a1300',authDark:true,auth:'#14110a',authT:'#f5e7b0',authI:'#262012',authIT:'#fff',authB:'#e6b800',authBT:'#1a1300',map:mkMap('#1a160d','#3d3320','#0e0b06','#b8a878','#e6b800','#6b5a2a','#1f2412')}),
+ amoled:mkT('Amoled',true,{bg:'#000',bg0:'#000',card:'#141414',acc:'#ffffff',accT:'#000',authDark:true,auth:'#000',authT:'#fff',authI:'#161616',authIT:'#fff',authB:'#fff',authBT:'#000',map:mkMap('#000','#262626','#0a0a0a','#888','#bbb','#444','#0b140d')})
+};
+const AUTO_OPT=['auto','Auto'];
+const sysDark=()=>window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches;
+function curStyle(){const t=THEMES[THEME_ID];return t&&t.map?t.map:LIGHTMAP}
+function applyTheme(id,save){
+ const pick=id==='auto'?(sysDark()?'dark':'white'):id,t=THEMES[pick]||THEMES.dark;THEME_ID=pick;
+ const r=document.documentElement;for(const k in t.v)r.style.setProperty(k,t.v[k]);
+ document.body.classList.toggle('light',!t.dark);document.body.classList.toggle('glass',!!t.glass);document.body.classList.toggle('dk-auth',!!t.authDark);
+ PIN=t.dark?{bg:'#fff',fg:'#111'}:{bg:'#16181d',fg:'#fff'};
+ const tc=document.querySelector('meta[name=theme-color]');tc&&tc.setAttribute('content',t.v['--bg0']);
+ window._themeSel=id;
+ if(save){lsS('ad_theme',id);if(me){db.collection('users').doc(me.uid).update({theme:id}).catch(()=>{});me.theme=id}}
+ try{if(map&&map.setOptions&&!EMB)map.setOptions({styles:curStyle()})}catch(e){}
+ refreshUI();
+}
+function refreshUI(){if(!me||$('#auth').hidden===false)return;try{if(me.role==='driver'){ride?drvView():drvIdle()}else paxView()}catch(e){}}
+if(window.matchMedia)matchMedia('(prefers-color-scheme: dark)').addEventListener&&matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(window._themeSel==='auto')applyTheme('auto')});
+
+/* ============ SETTINGS ============ */
+function showSettings(){$('#dr').hidden=true;renderSet();$('#set').hidden=false}
+function themeGrid(){
+ const sel=window._themeSel||'dark';
+ const card=(id,name,bg,card,acc)=>`<button class="th ${sel===id?'on':''}" onclick="pickTheme('${id}')"><span class="pv" style="background:${bg}"><i style="background:${card}"></i><b style="background:${acc}"></b><u style="background:${acc}"></u></span><span class="n">${name}</span></button>`;
+ return card('auto','Auto','linear-gradient(90deg,#111 50%,#e9eaec 50%)','rgba(128,128,128,.6)','#c1f11d')+Object.entries(THEMES).map(([id,t])=>card(id,t.n,t.prev,t.v['--card'],t.v['--acc'])).join('')}
+function renderSet(){
+ const P=prefs();
+ $('#setb').innerHTML=`<div class="sec">Appearance</div><div class="themes" id="thg">${themeGrid()}</div>
+ <div class="sec">Preferences</div>
+ <div class="srow"><span>📳 Vibrate on alerts</span><button class="sw ${P.vib?'on':''}" onclick="setPref('vib',this)"></button></div>
+ ${me.role==='passenger'?`<div class="srow"><span>⚡ Auto-accept offers by default</span><button class="sw ${P.auto?'on':''}" onclick="setPref('auto',this)"></button></div>`:''}
+ <div class="srow"><span>🕘 Recent places</span><button class="btn d s" onclick="lsS('ad_rec','[]');toast('Recent places cleared')">Clear</button></div>
+ <div class="sec">Profile</div>
+ <div class="f"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><input id="sn" placeholder="Full name" value="${esc(me.name)}"></div>
+ <div class="f"><svg viewBox="0 0 24 24"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 005 5L15 12l5 2v4a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-2z"/></svg><input id="sp" type="tel" placeholder="Phone" value="${esc(me.phone)}"></div>
+ ${me.role==='driver'?`<div class="f"><svg viewBox="0 0 24 24"><path d="M3 16v-4l2-5h14l2 5v4"/><path d="M3 16h18v3H3zM6 19v2M18 19v2"/></svg><input id="sc" placeholder="Car" value="${esc(me.car)}"></div><div class="f"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 14h12"/></svg><input id="sl" placeholder="Number plate" value="${esc(me.plate)}"></div>`:''}
+ <button class="btn" style="margin-top:8px" onclick="saveProf()">Save profile</button>
+ <div class="sec">Account</div>
+ <div class="srow"><span>${esc((auth.currentUser&&auth.currentUser.email)||'')}<br><small class="m">${me.role==='driver'?'Driver':'Passenger'} account</small></span></div>
+ <button class="lnk" onclick="$('#set').hidden=true;auth.signOut()">Sign out</button>
+ <p class="m" style="text-align:center">ArnDrive · Pay cash to your driver</p>`}
+function pickTheme(id){applyTheme(id,true);const g=$('#thg');g&&(g.innerHTML=themeGrid())}
+function setPref(k,el){const P=prefs();P[k]=!P[k];lsS('ad_pref',JSON.stringify(P));el.classList.toggle('on',P[k]);if(k==='auto')auto=P.auto}
+async function saveProf(){
+ const d={name:$('#sn').value.trim(),phone:$('#sp').value.trim()};
+ if(me.role==='driver'){d.car=$('#sc').value.trim();d.plate=$('#sl').value.trim().toUpperCase()}
+ if(!d.name||!d.phone||(me.role==='driver'&&(!d.car||!d.plate)))return toast('Please fill in every field.');
+ try{await db.collection('users').doc(me.uid).update(d);Object.assign(me,d);toast('Profile saved ✓')}catch(e){toast('Could not save. Try again.')}
+}
+
+let EMB=false,emb={c:null,url:''},embT=0,_mr;
+const mapReady=new Promise(r=>{_mr=r});
+window.initMap=()=>{if(EMB)return;map=new google.maps.Map($('#map'),{center:{lat:-17.8292,lng:31.0522},zoom:15,disableDefaultUI:true,gestureHandling:'greedy',clickableIcons:false,styles:curStyle()});
+ map.addListener('dragend',onDrag);_mr()};
+window.gm_authFailure=()=>useEmbed();
+{const s=document.createElement('script');s.src=`https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&callback=initMap&loading=async&v=weekly`;s.async=true;s.onerror=()=>useEmbed();document.head.appendChild(s)}
+setTimeout(()=>{if(!map)useEmbed()},8000);
+/* Keyless Google Maps embed (same method as the school website). Used automatically when the Maps JS API key/APIs are not working. */
+function embShow(u){if(emb.url===u)return;emb.url=u;$('#emb').src=u}
+function embCenter(ll){emb.c={lat:ll.lat,lng:ll.lng};embShow(`https://www.google.com/maps?q=${ll.lat},${ll.lng}&z=16&output=embed`)}
+function useEmbed(){
+ if(EMB)return;EMB=true;document.body.classList.add('emb');
+ for(const k in M){try{M[k].setMap(null)}catch(e){}delete M[k]}
+ if(poly){try{poly.setMap(null)}catch(e){}poly=null}
+ $('#map').hidden=true;$('#emb').hidden=false;
+ map={setCenter:embCenter,panTo:embCenter,setZoom(){},getCenter:()=>({lat:()=>emb.c?emb.c.lat:-17.8292,lng:()=>emb.c?emb.c.lng:31.0522}),fitBounds(){},addListener(){}};
+ embCenter({lat:-17.8292,lng:31.0522});_mr();
+}
+var DARK=[{elementType:'geometry',stylers:[{color:'#212428'}]},{elementType:'labels.text.fill',stylers:[{color:'#8a8f98'}]},{elementType:'labels.text.stroke',stylers:[{color:'#212428'}]},{featureType:'administrative',elementType:'geometry',stylers:[{color:'#3a3f47'}]},{featureType:'poi',elementType:'labels.text.fill',stylers:[{color:'#d58ab8'}]},{featureType:'poi.park',elementType:'geometry',stylers:[{color:'#1e2a22'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#38414f'}]},{featureType:'road',elementType:'geometry.stroke',stylers:[{color:'#212428'}]},{featureType:'road.highway',elementType:'geometry',stylers:[{color:'#4b5a73'}]},{featureType:'transit',stylers:[{visibility:'off'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#14171c'}]}];
+
+/* ============ HELPERS ============ */
+const hv=(a,b)=>{const r=Math.PI/180,x=Math.sin((b.lat-a.lat)*r/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin((b.lng-a.lng)*r/2)**2;return 12742*Math.asin(Math.sqrt(x))};
+const brg=(a,b)=>{const r=Math.PI/180,y=Math.sin((b.lng-a.lng)*r)*Math.cos(b.lat*r),x=Math.cos(a.lat*r)*Math.sin(b.lat*r)-Math.sin(a.lat*r)*Math.cos(b.lat*r)*Math.cos((b.lng-a.lng)*r);return(Math.atan2(y,x)/r+360)%360};
+const eta=km=>Math.max(1,Math.round(km/28*60));
+function toast(t){let e=$('#toast');e&&e.remove();e=document.createElement('div');e.id='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),3500);navigator.vibrate&&prefs().vib&&navigator.vibrate(120)}
+const fx=p=>Promise.resolve(p).catch(e=>toast(String(e.message||e).replace('Firebase: ','')));
+function put(k,pos,icon){if(EMB||!window.google)return;const c=M[k];if(c){c.setPosition(pos);if(icon&&c._k!==icon.url){c.setIcon(icon);c._k=icon.url}}else{M[k]=new google.maps.Marker({map,position:pos,icon,zIndex:k==='c'||k==='me'?9:5});M[k]._k=icon&&icon.url}}
+function clrMap(keep){for(const k in M)if(!keep||!keep.includes(k)){M[k].setMap(null);delete M[k]}if(poly){poly.setMap(null);poly=null}}
+function fit(pts){if(!pts.length)return;if(EMB){const a=pts[0],b=pts[1];if(b)embShow(`https://www.google.com/maps?saddr=${a.lat},${a.lng}&daddr=${b.lat},${b.lng}&output=embed`);else embCenter(a);return}const b=new google.maps.LatLngBounds();pts.forEach(p=>b.extend(p));map.fitBounds(b,{top:150,bottom:380,left:50,right:50})}
+async function nrev(ll){try{const j=await(await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${ll.lat}&lon=${ll.lng}`)).json();return(j.display_name||'').split(',').slice(0,2).join(',')||'Dropped pin'}catch(e){return'Dropped pin'}}
+async function rev(ll){if(EMB)return nrev(ll);try{const r=await new google.maps.Geocoder().geocode({location:ll});const f=r.results.find(x=>!/plus_code/.test(x.types.join()))||r.results[0];return(f.formatted_address||'').split(',').slice(0,2).join(',')||'Dropped pin'}catch{return nrev(ll)}}
+async function route(a,b){
+ if(EMB){const km=hv(a,b)*1.3;return{km,mins:Math.max(1,Math.round(km*2.5)),path:[]}}
+ try{const{Route}=await google.maps.importLibrary('routes');const{routes}=await Route.computeRoutes({origin:{lat:a.lat,lng:a.lng},destination:{lat:b.lat,lng:b.lng},travelMode:'DRIVING',fields:['path','distanceMeters','durationMillis']});const r=routes[0];return{km:r.distanceMeters/1000,mins:Math.max(1,Math.round(r.durationMillis/60000)),path:r.path.map(p=>({lat:p.lat,lng:p.lng}))}}catch(e){}
+ try{const j=await new google.maps.DirectionsService().route({origin:a,destination:b,travelMode:'DRIVING'});const l=j.routes[0].legs[0];return{km:l.distance.value/1000,mins:Math.max(1,Math.round(l.duration.value/60)),path:j.routes[0].overview_path.map(p=>({lat:p.lat(),lng:p.lng()}))}}catch(e){}
+ const km=hv(a,b)*1.3;return{km,mins:Math.max(1,Math.round(km*2.5)),path:[{lat:a.lat,lng:a.lng},{lat:b.lat,lng:b.lng}]}}
+function drawPoly(path){if(EMB)return;if(poly)poly.setMap(null);poly=new google.maps.Polyline({map,path,strokeColor:'#fff',strokeWeight:5,strokeOpacity:.95})}
+function modal(title,opts,danger){return new Promise(res=>{window._mdr=res;$('#mdp').innerHTML=`<h3 style="margin-bottom:8px">${esc(title)}</h3>${opts.map((o,i)=>`<button class="btn d" onclick="mdClose(${i})" style="text-align:left">${esc(o)}</button>`).join('')}<button class="lnk" style="color:var(--mut)" onclick="mdClose(null)">Keep ride</button>`;$('#md').hidden=false})}
+function mdClose(i){$('#md').hidden=true;window._mdr&&window._mdr(i);window._mdr=null}
+
+/* ============ AUTH ============ */
+const AUTHSUB=document.getElementById('atag').textContent;
+function authReset(){mode='in';$('#su').hidden=true;$('#su').style.display='none';$('#cred').hidden=false;$('#alt').hidden=false;$('#tg').hidden=false;$('#fg').hidden=false;$('#cx').hidden=true;$('#go').textContent='Sign in';$('#tg').textContent='New here? Create account';$('#atag').textContent=AUTHSUB;$('#err').textContent=''}
+function showComplete(u){mode='complete';$('#auth').hidden=false;['#menu','#top','#pin','#loc'].forEach(x=>$(x).hidden=true);sh('');
+ $('#su').hidden=false;$('#su').style.display='flex';$('#cred').hidden=true;$('#alt').hidden=true;$('#tg').hidden=true;$('#fg').hidden=true;$('#cx').hidden=false;
+ $('#go').textContent='Continue';$('#atag').textContent='Almost done. Tell us a bit about you.';$('#err').textContent='';
+ if(!$('#nm').value)$('#nm').value=u.displayName||'';$('#dv').hidden=$('#role').value!=='driver'}
+const eye=()=>{const p=$('#pw');p.type=p.type==='password'?'text':'password'};
+const AERR={'auth/unauthorized-domain':'Add this website in Firebase > Authentication > Settings > Authorized domains.','auth/operation-not-allowed':'Turn on Google in Firebase > Authentication > Sign-in method.','auth/network-request-failed':'No internet connection.','auth/account-exists-with-different-credential':'That email is registered with a password. Sign in with email instead.'};
+async function gsign(){
+ $('#err').textContent='';const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
+ try{await auth.signInWithPopup(p)}catch(e){
+  if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment','auth/web-storage-unsupported'].includes(e.code)){try{await auth.signInWithRedirect(p);return}catch(x){e=x}}
+  if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
+  $('#err').textContent=AERR[e.code]||String(e.message).replace('Firebase: ','')}}
+auth.getRedirectResult().catch(e=>{$('#err').textContent=AERR[e.code]||String(e.message||'').replace('Firebase: ','')});
 function tgl(){mode=mode==='in'?'up':'in';$('#su').hidden=mode==='in';$('#su').style.display=mode==='in'?'none':'flex';$('#go').textContent=mode==='in'?'Sign in':'Create account';$('#tg').textContent=mode==='in'?'New here? Create account':'Have an account? Sign in';$('#err').textContent=''}
+async function forgot(){const e=$('#em').value.trim();if(!e)return $('#err').textContent='Type your email first.';try{await auth.sendPasswordResetEmail(e);$('#err').style.color='#116b00';$('#err').textContent='Reset link sent. Check your email.'}catch(x){$('#err').style.color='#b00020';$('#err').textContent=String(x.message).replace('Firebase: ','')}}
 async function go(){
- const e=$('#em').value.trim(),p=$('#pw').value;$('#err').textContent='';
+ const e=$('#em').value.trim(),p=$('#pw').value;$('#err').style.color='#b00020';$('#err').textContent='';
  try{
   if(mode==='in'){await auth.signInWithEmailAndPassword(e,p);return}
   const d={name:$('#nm').value.trim(),phone:$('#ph').value.trim(),role:$('#role').value,car:$('#car').value.trim(),plate:$('#pl').value.trim().toUpperCase(),created:TS()};
   if(!d.name||!d.phone)throw Error('Enter your name and phone number.');
   if(d.role==='driver'&&(!d.car||!d.plate))throw Error('Drivers must enter car and number plate.');
+  if(mode==='complete'){const u=auth.currentUser;sg=1;await db.collection('users').doc(u.uid).set(d);me={...d,uid:u.uid};sg=0;boot();return}
   sg=1;const c=await auth.createUserWithEmailAndPassword(e,p);
   await db.collection('users').doc(c.user.uid).set(d);me={...d,uid:c.user.uid};sg=0;boot();
  }catch(x){sg=0;$('#err').textContent=String(x.message).replace('Firebase: ','')}
 }
 auth.onAuthStateChanged(async u=>{
- if(sg)return;
- if(!u){clean();me=null;$('#auth').hidden=false;$('#bar').hidden=true;sh('');clr();return}
+ if(sg)return;await mapReady;
+ if(!u){clean();authReset();me=null;$('#auth').hidden=false;['#menu','#top','#pin','#loc'].forEach(s=>$(s).hidden=true);sh('');clrMap();return}
  const s=await db.collection('users').doc(u.uid).get();
- if(!s.exists){auth.signOut();return}
+ if(!s.exists){showComplete(u);return}
  me={...s.data(),uid:u.uid};boot();
 });
-function clean(){U.forEach(f=>f());U=[];offU&&offU();offU=null;openU&&openU();openU=null;if(W){navigator.geolocation.clearWatch(W);W=null}ride=null;online=false}
+function clean(){U.forEach(f=>f());U=[];offU&&offU();offU=null;openU&&openU();openU=null;if(W){navigator.geolocation.clearWatch(W);W=null}ride=null;online=false;drop=null;rt=null;stage='idle';hadRide=false;prevSt=null;SENT={};DECL={};$('#md').hidden=true;$('#srch').hidden=true}
 function boot(){
- clean();$('#auth').hidden=true;$('#bar').hidden=false;$('#who').textContent=me.name+' · Sign out';
+ clean();authReset();$('#auth').hidden=true;$('#menu').hidden=false;if(me.theme&&THEMES[me.theme]&&me.theme!==window._themeSel)applyTheme(me.theme);
  me.role==='driver'?driverUI():paxUI();
 }
+function openMenu(){
+ $('#drp').innerHTML=`<div class="av" style="width:60px;height:60px;font-size:26px;background:var(--acc);color:var(--accT);margin-bottom:12px">${esc(me.name[0]||'?').toUpperCase()}</div><h3>${esc(me.name)}</h3><p class="m">${esc(me.phone)} · ${me.role==='driver'?esc(me.car)+' · '+esc(me.plate):'Passenger'}</p><div style="height:14px"></div>
+ <div class="di" onclick="showSettings()">⚙️ Settings</div><div class="di" onclick="showHist()">🕘 Ride history</div><div class="di" onclick="auth.signOut();$('#dr').hidden=true" style="color:var(--danger)">Sign out</div><p class="m" style="margin-top:20px">ArnDrive · Pay cash to your driver</p>`;$('#dr').hidden=false}
+async function showHist(){
+ $('#drp').innerHTML='<h3>Ride history</h3><p class="m">Loading…</p>';
+ try{const s=await R_.where(me.role==='driver'?'driver':'pax','==',me.uid).get();
+  const a=s.docs.map(d=>d.data()).filter(r=>r.status==='done'||r.status==='cancelled').sort((x,y)=>(y.created?.seconds||0)-(x.created?.seconds||0)).slice(0,30);
+  $('#drp').innerHTML='<h3>Ride history</h3>'+(a.length?a.map(r=>`<div class="card"><div class="row" style="margin:0"><b>${esc(r.drop?.name)}</b><span class="pr">${money(r.price)}</span></div><p class="m">${esc(r.pickup?.name)}<br>${r.created?new Date(r.created.seconds*1000).toLocaleString():''} · ${r.status==='done'?'<span class="tg">COMPLETED</span>':'<span class="tg x">CANCELLED</span>'}</p></div>`).join(''):'<p class="m">No rides yet.</p>')+'<button class="btn d" style="margin-top:12px" onclick="openMenu()">Back</button>';
+ }catch(e){$('#drp').innerHTML='<h3>Ride history</h3><p class="m">Could not load history.</p>'}
+}
 
-/* ---------- PASSENGER ---------- */
+/* ============ PASSENGER ============ */
 function paxUI(){
- navigator.geolocation.getCurrentPosition(async p=>{here={lat:p.coords.latitude,lng:p.coords.longitude};map.setView(here,15);put('p',here,dot('#1a1a1a'));const n=await rev(here);here.name=n;const k=$('#pk');if(k)k.value=n},()=>{},{enableHighAccuracy:true});
- map.off('click').on('click',e=>{if(me.role==='passenger'&&!ride&&$('#ds'))pin(e.latlng)});
- U.push(db.collection('rides').where('pax','==',me.uid).where('active','==',true).onSnapshot(s=>{ride=s.empty?null:{id:s.docs[0].id,...s.docs[0].data()};paxView()}));
+ locate(true);
+ U.push(R_.where('pax','==',me.uid).where('active','==',true).onSnapshot(s=>{
+  const old=ride;ride=s.empty?null:{id:s.docs[0].id,...s.docs[0].data()};
+  if(old&&ride){
+   if(old.status!==ride.status){const T={arrived:'Your driver has arrived 🚕',ongoing:'Trip started',done:"You've arrived"};T[ride.status]&&toast(T[ride.status])}
+   if(old.driver&&!ride.driver&&ride.status==='open')toast('Your driver cancelled. Finding you another driver…')}
+  if(old&&!ride){fitted='';if(old.status!=='done'&&old.status!=='cancelled'||old.status==='cancelled'){}}
+  if(!ride&&hadRide){drop=null;rt=null;stage='idle';DECL={}}
+  hadRide=!!ride;paxView()}));
+}
+function locate(first){
+ navigator.geolocation.getCurrentPosition(async p=>{
+  const ll={lat:p.coords.latitude,lng:p.coords.longitude};map.setCenter(ll);map.setZoom(16);
+  if(me.role==='passenger'&&stage==='idle'&&!ride){here={...ll,name:here?.name};setPin();here.name=await rev(ll);setPin()}
+  else if(me.role==='passenger'&&stage==='route'&&!ride){here={...ll};here.name=await rev(ll);doRoute()}
+ },()=>{if(!first)toast('Turn on location access.')},{enableHighAccuracy:true});
+}
+function setPin(){const n=here?.name||'Finding you…';$('#pn').textContent=n}
+async function onDrag(){
+ if(!me||me.role!=='passenger'||ride)return;
+ const c=map.getCenter(),ll={lat:c.lat(),lng:c.lng()};
+ if(stage==='idle'){here={...ll};$('#pn').textContent='…';here.name=await rev(ll);setPin()}
+ else if(stage==='pickdrop'){window._pd=ll;$('#pn').textContent='…';const n=await rev(ll);window._pdn=n;$('#pn').textContent=n}
 }
 function paxView(){
- offU&&offU();offU=null;clr();const r=ride;
- if(!r){drop=null;if(here)put('p',here,dot('#1a1a1a'));return sh(`<h3>Where to?</h3>
-  <div class="f"><i></i><input id="pk" readonly value="${esc(here&&here.name||'Finding you…')}"></div>
-  <div class="f"><i class="b"></i><input id="ds" placeholder="Search destination or tap the map" autocomplete="off" oninput="srch(this.value)"></div>
-  <div id="res"></div><div id="fare"></div>`)}
- put('p',[r.pickup.lat,r.pickup.lng],dot('#1a1a1a'));put('d',[r.drop.lat,r.drop.lng],dot('#9bc800'));
+ offU&&offU();offU=null;const r=ride;
+ if(!r){
+  $('#loc').style.bottom='';
+  if(stage==='route'&&drop&&here)return routeView();
+  if(stage==='pickdrop')return pickView();
+  return idleView()}
+ stage='route';$('#pin').hidden=true;$('#top').hidden=true;$('#loc').hidden=true;
+ const keep=['p','d','c'];clrMap(keep);
+ put('p',{lat:r.pickup.lat,lng:r.pickup.lng},pickI());put('d',{lat:r.drop.lat,lng:r.drop.lng},dropI());
  if(r.status==='open'){
-  sh(`<div class="row"><h3>Finding drivers…</h3><span class="pr">$${(+r.price).toFixed(2)}</span></div>
-  <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)} · ${r.km} km</p>
+  if(fitted!=='o'+r.id){fitted='o'+r.id;fit([r.pickup,r.drop])}
+  sh(`<div class="row"><h3>Finding drivers…</h3><span class="pr">${money(r.price)}</span></div>
+  <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)} · ${r.km} km${r.auto?' · <b style="color:var(--accX)">Auto-accept on</b>':''}</p>
   <div class="row"><button class="btn d s" onclick="bump(-.5)">−$0.50</button><button class="btn s" onclick="bump(.5)">Raise fare +$0.50</button></div>
   <div id="offers"><p class="m">Waiting for driver offers…</p></div><button class="lnk" onclick="cancel()">Cancel request</button>`);
-  offU=db.collection('rides').doc(r.id).collection('offers').onSnapshot(s=>{
-   O={};s.forEach(d=>O[d.id]=d.data());const a=Object.entries(O).sort((x,y)=>x[1].price-y[1].price);
-   $('#offers').innerHTML=a.length?a.map(([id,o])=>`<div class="card"><div class="row" style="margin:0"><div><b>${esc(o.name)}</b><br><span class="m">${esc(o.car)} · ${esc(o.plate)}</span></div><span class="pr">$${(+o.price).toFixed(2)}</span></div><button class="btn" style="margin-top:8px" onclick="acc('${id}')">Accept</button></div>`).join(''):'<p class="m">Waiting for driver offers…</p>'});
-  return;
- }
- if(r.status==='done')return sh(`<h3>You've arrived</h3><p class="m">Pay the driver $${(+r.price).toFixed(2)} in cash. How was your ride?</p><div class="st">${[1,2,3,4,5].map(n=>`<button onclick="rate(${n})">⭐</button>`).join('')}</div><button class="lnk" style="color:#777" onclick="rate(0)">Skip</button>`);
+  offU=R_.doc(r.id).collection('offers').onSnapshot(s=>{
+   O={};s.forEach(d=>O[d.id]=d.data());
+   if(ride&&ride.auto){const best=Object.entries(O).filter(([i,o])=>+o.price<=+ride.price&&!DECL[i]).sort((a,b)=>a[1].price-b[1].price)[0];if(best&&ride.status==='open'){offU&&offU();offU=null;return acc(best[0])}}
+   const a=Object.entries(O).filter(([id])=>!DECL[id]).sort((x,y)=>x[1].price-y[1].price),b=$('#offers');if(!b)return;
+   b.innerHTML=a.length?a.map(([id,o])=>`<div class="card"><div class="of"><div class="av">${esc((o.name||'?')[0]).toUpperCase()}</div><div class="t"><b>${esc(o.name)}</b><span class="m" style="margin:0">${esc(o.car)} · <span class="plate">${esc(o.plate)}</span>${o.eta?'<br>'+o.eta+' min away':''}</span></div><span class="pr">${money(o.price)}</span></div>
+   <div class="row" style="margin-bottom:0"><button class="btn d s" style="flex:1" onclick="decl('${id}')">Decline</button><button class="btn s" style="flex:2" onclick="acc('${id}')">Accept</button></div></div>`).join(''):'<p class="m">Waiting for driver offers…</p>'});
+  return}
+ if(r.status==='done'){clrMap();$('#top').hidden=true;
+  return sh(`<h3>You've arrived</h3><p class="m">Pay the driver ${money(r.price)} in cash. How was your ride with ${esc(r.driverName)}?</p><div class="stars" id="stars">${[1,2,3,4,5].map(n=>`<button onclick="rate(${n})">⭐</button>`).join('')}</div><button class="lnk" style="color:var(--mut)" onclick="rate(0)">Skip</button>`)}
  const T={accepted:'Your driver is on the way',arrived:'Your driver has arrived',ongoing:'Enjoy your trip'};
- if(r.dLoc)put('c',[r.dLoc.lat,r.dLoc.lng],carI);
- sh(`<div class="row"><h3>${T[r.status]||''}</h3><span class="pr">$${(+r.price).toFixed(2)}</span></div>
- <div class="card"><b>${esc(r.driverName)}</b><br><span class="m">${esc(r.driverCar)} · ${esc(r.driverPlate)}</span></div>
- <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)}</p>
- <div class="row"><a class="btn d" href="tel:${esc(r.driverPhone)}">Call driver</a></div>${r.status!=='ongoing'?'<button class="lnk" onclick="cancel()">Cancel ride</button>':''}`);
+ let sub='';
+ if(r.dLoc){const dl=r.dLoc,tgt=r.status==='ongoing'?r.drop:r.pickup,k=hv(dl,tgt);sub=r.status==='ongoing'?`${k.toFixed(1)} km to destination`:r.status==='arrived'?'':`${k.toFixed(1)} km away · about ${eta(k)} min`;
+  put('c',{lat:dl.lat,lng:dl.lng},carI(r.dHead));
+  if(EMB&&Date.now()-embT>15000){embT=Date.now();fit([dl,tgt])}
+  if(fitted!==r.status+r.id){fitted=r.status+r.id;fit([dl,tgt])}}
+ sh(`<div class="row"><h3>${T[r.status]||''}</h3><span class="pr">${money(r.price)}</span></div>${sub?`<p class="m">${sub}</p>`:''}
+ <div class="card"><div class="of"><div class="av">${esc((r.driverName||'?')[0]).toUpperCase()}</div><div class="t"><b>${esc(r.driverName)}</b><span class="m" style="margin:0">${esc(r.driverCar)}</span></div><span class="plate" style="font-size:16px;padding:3px 10px">${esc(r.driverPlate)}</span></div></div>
+ <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)}</p>${r.note?`<p class="m">📝 ${esc(r.note)}</p>`:''}
+ <div class="row"><a class="btn d" href="tel:${esc(r.driverPhone)}">📞 Call driver</a></div>${r.status!=='ongoing'?'<button class="lnk" onclick="cancel()">Cancel ride</button>':''}`);
 }
-let srT;function srch(v){clearTimeout(tm);if(v.length<3){$('#res').innerHTML='';return}tm=setTimeout(async()=>{try{R=await(await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=zw&limit=5&q=${encodeURIComponent(v)}`)).json();$('#res').innerHTML=R.length?R.map((r,i)=>`<div class="it" onclick="pickR(${i})">${esc(r.display_name.split(',').slice(0,3).join(','))}</div>`).join(''):'<p class="m">No results. Tap the map to drop a pin.</p>'}catch{}},500)}
-function pickR(i){const r=R[i],n=r.display_name.split(',').slice(0,2).join(',');$('#ds').value=n;$('#res').innerHTML='';setDrop({lat:+r.lat,lng:+r.lon},n)}
-async function pin(ll){$('#ds').value='Finding address…';const n=await rev(ll);$('#ds').value=n;$('#res').innerHTML='';setDrop(ll,n)}
+function recents(){try{return JSON.parse(localStorage.getItem('ad_rec')||'[]')}catch{return[]}}
+function addRecent(p){try{const a=recents().filter(x=>x.name!==p.name);a.unshift(p);localStorage.setItem('ad_rec',JSON.stringify(a.slice(0,6)))}catch{}}
+function idleView(){
+ clrMap();$('#top').hidden=true;$('#pin').hidden=false;$('#pl').textContent='Pickup point';$('#pic').innerHTML=sq(PERSON);$('#loc').hidden=false;setPin();
+ const rc=recents().slice(0,4);
+ sh(`<div class="tabs"><button class="tab ${rtype==='ride'?'on':''}" onclick="setType('ride')">${CAR}Ride <span class="sub">👤 4</span></button><button class="tab ${rtype==='c2c'?'on':''}" onclick="setType('c2c')"><span style="display:flex;align-items:center;gap:4px"><span style="font-size:22px">🧳</span>${CAR.replace('class="car"','style="width:48px;height:22px"')}</span>City to city</button></div>
+ <button class="where" onclick="openSearch('ds')"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Where to &amp; for how much?</button>
+ ${rc.map((x,i)=>`<div class="rec" onclick="useRecent(${i})">${IC_CLOCK}<div>${esc(x.name.split(',')[0])}<small>${esc(x.name.split(',').slice(1).join(',').trim())}</small></div></div>`).join('')}`);
+ requestAnimationFrame(()=>{$('#loc').style.bottom=($('#sheet').offsetHeight+14)+'px'});
+}
+const setType=t=>{rtype=t;idleView()};
+function useRecent(i){const x=recents()[i];if(x)setDrop({lat:x.lat,lng:x.lng},x.name)}
+/* search */
+function openSearch(f){if(!here)return toast('Waiting for your location…');sf=f||'ds';$('#srch').hidden=false;$('#spk').value=here.name||'';$('#sds').value='';stok=null;renderRec();setTimeout(()=>$(sf==='ds'?'#sds':'#spk').focus(),60)}
+function closeSearch(){$('#srch').hidden=true}
+function renderRec(){const rc=recents();$('#sres').innerHTML=rc.map((x,i)=>`<div class="rec" onclick="useRec2(${i})">${IC_CLOCK}<div>${esc(x.name.split(',')[0])}<small>${esc(x.name.split(',').slice(1).join(',').trim())}</small></div></div>`).join('')}
+function useRec2(i){const x=recents()[i];x&&applyPick({lat:x.lat,lng:x.lng},x.name)}
+function query(v,f){sf=f;clearTimeout(qt);if(v.length<2){renderRec();return}qt=setTimeout(async()=>{
+ if(EMB)return nomSearch(v);
+ try{const{AutocompleteSuggestion,AutocompleteSessionToken}=await google.maps.importLibrary('places');stok=stok||new AutocompleteSessionToken();
+  const c=map.getCenter();const{suggestions}=await AutocompleteSuggestion.fetchAutocompleteSuggestions({input:v,includedRegionCodes:['zw'],sessionToken:stok,locationBias:{center:{lat:c.lat(),lng:c.lng()},radius:50000}});
+  sres=suggestions.filter(s=>s.placePrediction);
+  $('#sres').innerHTML=sres.length?sres.map((s,i)=>{const p=s.placePrediction;return`<div class="rec" onclick="pickS(${i})">${IC_PIN}<div>${esc(p.mainText?.text||p.text.text)}<small>${esc(p.secondaryText?.text||'')}</small></div></div>`}).join(''):'<p class="m">No results. Try "Choose on map".</p>';
+ }catch(e){nomSearch(v)}},300)}
+async function nomSearch(v){try{const r=await(await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=zw&limit=6&q=${encodeURIComponent(v)}`)).json();
+ sres=r.map(x=>({nom:1,lat:+x.lat,lng:+x.lon,name:x.display_name.split(',').slice(0,2).join(','),sub:x.display_name.split(',').slice(2,4).join(',')}));
+ $('#sres').innerHTML=sres.length?sres.map((s,i)=>`<div class="rec" onclick="pickS(${i})">${IC_PIN}<div>${esc(s.name.split(',')[0])}<small>${esc(s.sub)}</small></div></div>`).join(''):'<p class="m">No results. Try a nearby landmark or suburb.</p>'}catch(e){$('#sres').innerHTML='<p class="m">Search is unavailable right now.</p>'}}
+async function pickS(i){
+ if(sres[i]&&sres[i].nom){const x=sres[i];return applyPick({lat:x.lat,lng:x.lng},x.name)}
+ try{const p=sres[i].placePrediction,pl=p.toPlace();await pl.fetchFields({fields:['location','displayName','formattedAddress']});stok=null;
+  const name=[p.mainText?.text||pl.displayName,p.secondaryText?.text].filter(Boolean).join(', ').split(',').slice(0,2).join(',');
+  applyPick({lat:pl.location.lat(),lng:pl.location.lng()},name)}catch(e){toast('Could not load that place.')}}
+function applyPick(ll,name){
+ if(sf==='pk'){here={...ll,name};$('#spk').value=name;map.setCenter(ll);$('#sds').focus();sf='ds';if(drop){closeSearch();stage='route';doRoute()}else setPin();return}
+ closeSearch();setDrop(ll,name)}
+function chooseOnMap(){closeSearch();stage='pickdrop';window._pd=null;paxView()}
+function pickView(){
+ clrMap();$('#top').hidden=true;$('#pin').hidden=false;$('#loc').hidden=true;$('#pl').textContent='Destination';$('#pic').innerHTML=sq(FLAG);$('#pn').textContent='Move the map…';
+ sh(`<button class="bk" onclick="stage='idle';paxView()">←</button><h3>Set destination</h3><p class="m">Drag the map so the pin sits on where you're going.</p><button class="btn" onclick="confPick()">Confirm destination</button>`);
+ if(!window._pd){const c=map.getCenter();window._pd={lat:c.lat(),lng:c.lng()};rev(window._pd).then(n=>{window._pdn=n;if(stage==='pickdrop')$('#pn').textContent=n})}
+}
+function confPick(){const ll=window._pd||{lat:map.getCenter().lat(),lng:map.getCenter().lng()};$('#pin').hidden=true;setDrop(ll,window._pdn||'Dropped pin')}
 async function setDrop(ll,name){
- if(!here)return alert('Allow location access so we can find your pickup point.');
- drop={lat:ll.lat,lng:ll.lng,name};put('d',[ll.lat,ll.lng],dot('#9bc800'));$('#fare').innerHTML='<p class="m">Calculating route…</p>';
- try{
-  const j=await(await fetch(`https://router.project-osrm.org/route/v1/driving/${here.lng},${here.lat};${ll.lng},${ll.lat}?overview=full&geometries=geojson`)).json(),rt=j.routes[0];
-  km=rt.distance/1000;mins=Math.round(rt.duration/60);if(line)line.remove();
-  line=L.geoJSON(rt.geometry,{style:{color:'#1a1a1a',weight:5}}).addTo(map);fit(line.getBounds());
- }catch{km=hv(here,ll)*1.3;mins=Math.round(km*2.5)}
- sug=Math.max(1.5,Math.round((1+.5*km)*2)/2);
- $('#fare').innerHTML=`<div class="row"><span class="m">${km.toFixed(1)} km · about ${mins} min</span><span class="m">Suggested $${sug.toFixed(2)}</span></div>
- <div class="pc"><button onclick="adj(-.5)">−</button><b style="font-size:24px">$</b><input id="pr" type="number" step=".5" min="1" value="${sug.toFixed(2)}"><button onclick="adj(.5)">+</button></div>
- <p class="m">Offer a fair price: drivers can accept it or counter. Pay cash.</p><button class="btn" onclick="req()">Find a driver</button>`;
+ if(!here)return toast('Allow location access so we can find your pickup point.');
+ drop={lat:ll.lat,lng:ll.lng,name};addRecent(drop);stage='route';await doRoute()}
+async function doRoute(){
+ $('#pin').hidden=true;clrMap();sh('<h3>Calculating route…</h3>');
+ rt=await route(here,drop);
+ const sug=rtype==='c2c'?Math.max(5,Math.round((3+.6*rt.km)*2)/2):Math.max(1.5,Math.round((1+.5*rt.km)*2)/2);
+ price=sug;paxView()}
+function routeView(){
+ clrMap();$('#pin').hidden=true;$('#loc').hidden=true;
+ put('p',{lat:here.lat,lng:here.lng},pickI());put('d',{lat:drop.lat,lng:drop.lng},dropI());
+ if(rt)drawPoly(rt.path);fit([here,drop]);
+ $('#top').hidden=false;$('#top').innerHTML=`<div class="tr" onclick="openSearch('pk')">${IC_PERSON}<b>${esc(here.name||'Pickup')}</b></div><div class="tr" onclick="openSearch('ds')">${IC_FLAG}<b>${esc(drop.name)} <small>~${rt?rt.mins:'?'} min</small></b></div>`;
+ sh(`<button class="bk" onclick="backIdle()">←</button>
+ <div class="rc">${CAR}<div><b>${rtype==='ride'?'Ride':'City to city'}</b><br><span class="g">👤 4 • ${rt.mins} min • ${rt.km.toFixed(1)} km</span><br><span class="g">Affordable fares</span></div></div>
+ <div class="pcw"><div class="pc"><button onclick="adj(-.5)">−</button><div class="amt" id="amt">${money(price).replace('.00','')}</div><button onclick="adj(.5)">+</button></div>
+ <div class="auto"><svg class="i" viewBox="0 0 24 24" fill="#fff"><path d="M3 11l18-8-8 18-2-8z"/></svg><span id="aut">Auto-accept offer of ${money(price).replace('.00','')}</span><button class="sw ${auto?'on':''}" id="sw" onclick="tAuto()"></button></div></div>
+ <div class="fr"><div class="cash">$</div><button class="btn" onclick="req()">Find drivers</button><button class="opt" onclick="opts()">${IC_OPT}</button></div>`);
 }
-const adj=d=>{const i=$('#pr');i.value=Math.max(1,+i.value+d).toFixed(2)};
+function backIdle(){drop=null;rt=null;stage='idle';paxView();map.setZoom(16);map.panTo(here)}
+function adj(d){price=Math.max(1,price+d);const t=money(price).replace('.00','');$('#amt').textContent=t;$('#aut').textContent='Auto-accept offer of '+t}
+function tAuto(){auto=!auto;$('#sw').classList.toggle('on',auto)}
+async function opts(){
+ $('#mdp').innerHTML=`<h3 style="margin-bottom:10px">Ride options</h3><p class="m">Comment for the driver</p><input class="cin" id="nt" maxlength="120" placeholder="e.g. I'm at the gate, wearing red" value="${esc(note)}"><p class="m">Payment: <b>Cash</b> to the driver at the end of the trip.</p><button class="btn" onclick="note=$('#nt').value.trim();mdClose(null)">Save</button>`;$('#md').hidden=false}
 async function req(){
- const price=+$('#pr').value;if(!(price>0)||!drop||!here)return;
- await db.collection('rides').add({pax:me.uid,paxName:me.name,paxPhone:me.phone,pickup:{lat:here.lat,lng:here.lng,name:here.name||'Pickup'},drop,km:+km.toFixed(1),price,status:'open',active:true,created:TS()});
+ if(!(price>0)||!drop||!here)return;
+ await fx(R_.add({pax:me.uid,paxName:me.name,paxPhone:me.phone,pickup:{lat:here.lat,lng:here.lng,name:here.name||'Pickup'},drop,km:+rt.km.toFixed(1),mins:rt.mins,type:rtype,price,auto,note,status:'open',active:true,created:TS()}));
 }
-const bump=d=>db.collection('rides').doc(ride.id).update({price:Math.max(1,+ride.price+d)});
-const acc=id=>{const o=O[id];db.collection('rides').doc(ride.id).update({status:'accepted',driver:o.driver,driverName:o.name,driverPhone:o.phone,driverCar:o.car,driverPlate:o.plate,price:o.price})};
-const cancel=()=>confirm('Cancel this ride?')&&db.collection('rides').doc(ride.id).update({status:'cancelled',active:false});
-const rate=n=>db.collection('rides').doc(ride.id).update({rating:n,active:false});
+const bump=d=>fx(R_.doc(ride.id).update({price:Math.max(1,+ride.price+d)}));
+const acc=id=>{const o=O[id];if(!o)return;fx(R_.doc(ride.id).update({status:'accepted',driver:o.driver,driverName:o.name,driverPhone:o.phone,driverCar:o.car,driverPlate:o.plate,price:o.price}))};
+const decl=id=>{DECL[id]=1;paxView()};
+async function cancel(){
+ const r=ride;if(!r)return;
+ if(r.status==='open'){if(!confirm('Cancel this request?'))return;return fx(R_.doc(r.id).update({status:'cancelled',active:false,cancelledBy:'passenger'}))}
+ const i=await modal('Why are you cancelling?',['Driver is too far','Driver asked me to cancel','Changed my plans','Wrong pickup or destination','Other']);
+ if(i===null)return;
+ fx(R_.doc(r.id).update({status:'cancelled',active:false,cancelledBy:'passenger',reason:['Driver is too far','Driver asked me to cancel','Changed my plans','Wrong pickup or destination','Other'][i]}));toast('Ride cancelled')}
+const rate=n=>fx(R_.doc(ride.id).update({rating:n,active:false}));
 
-/* ---------- DRIVER ---------- */
+/* ============ DRIVER ============ */
 function driverUI(){
- let t=0,first=1;
- W=navigator.geolocation.watchPosition(p=>{here={lat:p.coords.latitude,lng:p.coords.longitude};if(first){first=0;map.setView(here,14)}put('me',here,carI);
-  if(ride&&ride.status!=='done'&&Date.now()-t>4000){t=Date.now();db.collection('rides').doc(ride.id).update({dLoc:here})}},()=>alert('Turn on location to drive with ArnDrive.'),{enableHighAccuracy:true});
- U.push(db.collection('rides').where('driver','==',me.uid).where('active','==',true).onSnapshot(s=>{ride=s.empty?null:{id:s.docs[0].id,...s.docs[0].data()};drvView()}));
+ let t=0,first=1;$('#loc').hidden=false;$('#loc').style.bottom='';
+ W=navigator.geolocation.watchPosition(p=>{
+  const ll={lat:p.coords.latitude,lng:p.coords.longitude};let h=p.coords.heading;
+  if(h==null||isNaN(h)){if(prevPos&&hv(prevPos,ll)>.005)h=brg(prevPos,ll);else h=lastHead}
+  lastHead=h;prevPos=ll;here=ll;if(first){first=0;map.setCenter(ll);map.setZoom(15)}
+  put('me',ll,carI(h));
+  if(ride&&ride.status!=='done'&&Date.now()-t>4000){t=Date.now();fx(R_.doc(ride.id).update({dLoc:ll,dHead:Math.round(h)}))}},
+  ()=>toast('Turn on location to drive with ArnDrive.'),{enableHighAccuracy:true});
+ U.push(R_.where('driver','==',me.uid).where('active','==',true).onSnapshot(s=>{
+  const old=ride;ride=s.empty?null:{id:s.docs[0].id,...s.docs[0].data()};
+  if(old&&!ride&&old.status!=='done'){toast('The passenger cancelled the ride.')}
+  if(!old&&ride)toast('Passenger accepted your offer! 🎉');
+  drvView()}));
+ U.push(R_.where('driver','==',me.uid).where('status','==','done').onSnapshot(s=>{HIST=s.docs.map(d=>d.data());if(!ride&&online)drawReqs();else if(!ride)drvIdle()}));
 }
 function drvView(){
- openU&&openU();openU=null;
- for(const k in M)if(k!=='me'){M[k].remove();delete M[k]}if(line){line.remove();line=null}
+ openU&&openU();openU=null;$('#top').hidden=true;$('#loc').hidden=!!ride&&false;
+ clrMap(['me']);
  if(!ride||ride.status==='done')return drvIdle();
  const r=ride,toP=r.status==='accepted'||r.status==='arrived',tgt=toP?r.pickup:r.drop;
- put('p',[r.pickup.lat,r.pickup.lng],dot('#1a1a1a'));put('d',[r.drop.lat,r.drop.lng],dot('#9bc800'));
+ put('p',{lat:r.pickup.lat,lng:r.pickup.lng},pickI());put('d',{lat:r.drop.lat,lng:r.drop.lng},dropI());
+ if(fitted!==r.status+r.id){fitted=r.status+r.id;fit(here?[here,tgt]:[tgt]);route(toP&&here?here:r.pickup,tgt).then(x=>{if(ride&&ride.id===r.id&&x.path.length>2)drawPoly(x.path)})}
  const nx={accepted:['I have arrived','arrived'],arrived:['Start trip','ongoing'],ongoing:['Complete trip','done']}[r.status];
- sh(`<div class="row"><h3>${toP?'Pick up '+esc(r.paxName):'Trip in progress'}</h3><span class="pr">$${(+r.price).toFixed(2)}</span></div>
- <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)} · ${r.km} km</p>
- <div class="row"><a class="btn d" href="tel:${esc(r.paxPhone)}">Call</a><a class="btn d" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${tgt.lat},${tgt.lng}">Navigate</a></div>
+ sh(`<div class="row"><h3>${toP?'Pick up '+esc(r.paxName):'Trip in progress'}</h3><span class="pr">${money(r.price)}</span></div>
+ <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)} · ${r.km} km</p>${r.note?`<p class="m">📝 ${esc(r.note)}</p>`:''}
+ <div class="row"><a class="btn d" href="tel:${esc(r.paxPhone)}">📞 Call</a><a class="btn d" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${tgt.lat},${tgt.lng}&travelmode=driving">🧭 Navigate</a></div>
  <button class="btn" onclick="step('${nx[1]}')">${nx[0]}</button>${toP?'<button class="lnk" onclick="dcancel()">Cancel pickup</button>':''}`);
 }
-const step=s=>db.collection('rides').doc(ride.id).update({status:s});
-const dcancel=()=>confirm('Cancel this pickup? The request goes back to other drivers.')&&db.collection('rides').doc(ride.id).update({status:'open',driver:null,driverName:null,driverPhone:null,driverCar:null,driverPlate:null,dLoc:null});
+const step=s=>fx(R_.doc(ride.id).update({status:s}));
+async function dcancel(){
+ const L=['Passenger not at pickup','Passenger asked me to cancel','Car problem','Too far / wrong location','Other'];
+ const i=await modal('Why are you cancelling?',L);if(i===null)return;
+ const id=ride.id;await fx(R_.doc(id).update({status:'open',driver:null,driverName:null,driverPhone:null,driverCar:null,driverPlate:null,dLoc:null,dHead:null,lastDriverCancel:L[i]}));
+ fx(R_.doc(id).collection('offers').doc(me.uid).delete());SENT[id]=0;toast('Pickup cancelled')}
 const tog=()=>{online=!online;drvIdle()};
 function drvIdle(){
- openU&&openU();openU=null;
- sh(`<div class="row"><h3>${online?'You are online':'You are offline'}</h3><button class="btn s ${online?'d':''}" onclick="tog()">${online?'Go offline':'Go online'}</button></div><div id="reqs">${online?'<p class="m">Looking for ride requests…</p>':'<p class="m">Go online to see passengers near you.</p>'}</div>`);
+ openU&&openU();openU=null;$('#top').hidden=true;$('#pin').hidden=true;clrMap(['me']);if(here)put('me',here,carI(lastHead));
+ const t0=new Date();t0.setHours(0,0,0,0);const td=HIST.filter(h=>h.created&&h.created.seconds*1000>=t0);
+ sh(`<div class="row"><h3>${online?'You are online':'You are offline'}</h3><button class="btn s ${online?'d':''}" onclick="tog()">${online?'Go offline':'Go online'}</button></div>
+ <div class="row" style="gap:8px"><div class="card" style="flex:1;margin:0;text-align:center"><div class="m" style="margin:0">Today</div><b class="pr">${money(td.reduce((a,h)=>a+(+h.price||0),0))}</b></div><div class="card" style="flex:1;margin:0;text-align:center"><div class="m" style="margin:0">Trips</div><b class="pr">${td.length}</b></div></div>
+ <div id="reqs">${online?'<p class="m">Looking for ride requests…</p>':'<p class="m">Go online to see passengers near you.</p>'}</div>`);
  if(!online)return;
- openU=db.collection('rides').where('status','==','open').onSnapshot(s=>{
+ openU=R_.where('status','==','open').onSnapshot(s=>{
   RQ=s.docs.map(d=>({id:d.id,...d.data()})).map(r=>({...r,d:here?hv(here,r.pickup):0})).sort((a,b)=>a.d-b.d);drawReqs()});
 }
 function drawReqs(){
- const box=$('#reqs');if(!box||(document.activeElement&&box.contains(document.activeElement)))return;
- for(const k in M)if(k[0]==='r'){M[k].remove();delete M[k]}
- RQ.forEach(r=>put('r'+r.id,[r.pickup.lat,r.pickup.lng],dot('#c1f11d')));
- box.innerHTML=RQ.length?RQ.map(r=>`<div class="card"><div class="row" style="margin:0"><b>${esc(r.paxName)}</b><span class="pr">$${(+r.price).toFixed(2)}</span></div>
- <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)}<br>${r.km} km trip · ${r.d.toFixed(1)} km from you</p>
- ${SENT[r.id]?`<p class="m"><b>Offer of $${(+SENT[r.id]).toFixed(2)} sent. Waiting for passenger…</b></p>`:`<button class="btn" onclick="offer('${r.id}',${r.price})">Accept $${(+r.price).toFixed(2)}</button>
- <div class="pc" style="margin-bottom:0"><input id="c${r.id}" type="number" step=".5" min="1" placeholder="Your price" style="background:#fff;border-radius:12px;height:46px;font-size:18px"><button class="btn d s" onclick="offer('${r.id}',+$('#c${r.id}').value)">Counter</button></div>`}</div>`).join(''):'<p class="m">No requests right now. They appear here instantly.</p>';
+ const box=$('#reqs');if(!box||ride||!online)return;if(document.activeElement&&box.contains(document.activeElement))return;
+ for(const k in M)if(k[0]==='r'){M[k].setMap(null);delete M[k]}
+ RQ.forEach(r=>put('r'+r.id,{lat:r.pickup.lat,lng:r.pickup.lng},pickI()));
+ box.innerHTML=RQ.length?RQ.map(r=>`<div class="card"><div class="row" style="margin:0"><b>${esc(r.paxName)}</b><span class="pr">${money(r.price)}</span></div>
+ <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)}<br>${r.km} km trip · ${r.d.toFixed(1)} km from you${r.auto?' · <span class="tg">AUTO-ACCEPT</span>':''}${r.type==='c2c'?' · <span class="tg">CITY TO CITY</span>':''}${r.note?'<br>📝 '+esc(r.note):''}</p>
+ ${SENT[r.id]?`<p class="m"><b>Offer of ${money(SENT[r.id])} sent. Waiting for passenger…</b></p>`:`<button class="btn" onclick="offer('${r.id}',${r.price})">Accept ${money(r.price)}</button>
+ <div class="pc" style="margin-top:8px"><input class="cin" id="c${r.id}" type="number" step=".5" min="1" placeholder="Your price"><button class="btn d s" style="width:auto;border-radius:12px;height:46px;font-size:15px" onclick="offer('${r.id}',+$('#c${r.id}').value)">Counter</button></div>`}</div>`).join(''):'<p class="m">No requests right now. They appear here instantly.</p>';
 }
-async function offer(id,price){
- if(!(price>0))return;
- await db.collection('rides').doc(id).collection('offers').doc(me.uid).set({driver:me.uid,name:me.name,phone:me.phone,car:me.car,plate:me.plate,price,ts:TS()});
- SENT[id]=price;drawReqs();
+async function offer(id,p){
+ if(!(p>0))return toast('Enter a price first.');
+ const r=RQ.find(x=>x.id===id);
+ await fx(R_.doc(id).collection('offers').doc(me.uid).set({driver:me.uid,name:me.name,phone:me.phone,car:me.car,plate:me.plate,price:p,eta:r?eta(r.d):null,ts:TS()}));
+ SENT[id]=p;drawReqs();
 }
+applyTheme(lsG('ad_theme')||'dark');
 </script>
 </body></html>
