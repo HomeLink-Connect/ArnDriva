@@ -1,16 +1,42 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1b1b1b">
+<meta name="theme-color" content="#111111">
+<meta name="application-name" content="ArnDrive">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ArnDrive">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="ArnDrive: name your fare and ride anywhere in Zimbabwe.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>ArnDrive</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<!-- FIRESTORE RULES (Firebase console > Firestore > Rules):
-rules_version='2';service cloud.firestore{match /databases/{d}/documents{
- match /users/{u}{allow read:if request.auth!=null;allow write:if request.auth.uid==u;}
- match /rides/{r}{allow read:if request.auth!=null;
+<!-- FIRESTORE RULES: paste in Firebase console > Firestore Database > Rules > Publish
+rules_version='2';
+service cloud.firestore{match /databases/{d}/documents{
+ function signedIn(){return request.auth!=null}
+ function isAdmin(){return signedIn()&&get(/databases/$(d)/documents/users/$(request.auth.uid)).data.get('admin',false)==true}
+ function verifiedDriver(){return get(/databases/$(d)/documents/users/$(request.auth.uid)).data.get('dstatus','legacy') in ['verified','legacy']}
+ match /users/{u}{
+  allow read:if signedIn();
+  allow create:if request.auth.uid==u&&!('admin' in request.resource.data);
+  allow update:if (request.auth.uid==u
+      &&!request.resource.data.diff(resource.data).affectedKeys().hasAny(['admin','dreviewed'])
+      &&(!request.resource.data.diff(resource.data).affectedKeys().hasAny(['dstatus'])||request.resource.data.dstatus in ['pending','none']))
+     ||isAdmin();
+  allow delete:if request.auth.uid==u;
+  match /docs/{k}{allow read:if request.auth.uid==u||isAdmin();allow write:if request.auth.uid==u;}
+ }
+ match /rides/{r}{
+  allow read:if signedIn();
   allow create:if request.auth.uid==request.resource.data.pax;
-  allow update:if request.auth!=null&&(request.auth.uid==resource.data.pax||request.auth.uid==resource.data.driver||resource.data.status=='open');
-  match /offers/{o}{allow read:if request.auth!=null;allow write:if request.auth.uid==o;}}}}
+  allow update:if signedIn()&&(request.auth.uid==resource.data.pax||request.auth.uid==resource.data.driver||resource.data.status=='open');
+  match /offers/{o}{allow read:if signedIn();allow write:if request.auth.uid==o&&verifiedDriver();}
+ }
+}}
+To make yourself an admin (so you can approve drivers): Firebase console > Firestore > users > your document > add field  admin  (boolean) = true
 -->
 <style>
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
@@ -134,6 +160,116 @@ body.glass .btn.d,body.glass .pc button{-webkit-backdrop-filter:blur(8px);backdr
 .or{display:flex;align-items:center;gap:10px;font-weight:700;font-size:13px;opacity:.65;margin:4px 0}.or::before,.or::after{content:"";flex:1;height:1px;background:currentColor;opacity:.5}
 #err{color:#b00020;font-weight:600;font-size:14px;min-height:18px}
 body.dk-auth #err{color:#ff8a8a}
+
+/* ===== v3 additions ===== */
+.ico{flex:none;vertical-align:middle}
+.mm{color:var(--mut);font-weight:600;font-size:.9em}
+.car3d{display:block;width:84px;height:auto;pointer-events:none;-webkit-user-drag:none;user-select:none}
+.tab{display:flex;flex-direction:column;gap:2px;align-items:flex-start;position:relative;padding:6px 10px 8px;overflow:hidden}
+.tab .car3d{width:100%;max-width:130px;margin:0 auto}
+.tab .tl{display:flex;justify-content:space-between;width:100%;font-weight:700;font-size:15px;align-items:center}
+.tab .sub{display:inline-flex;gap:3px;align-items:center;float:none;opacity:.85}
+.tab .lug{position:absolute;left:8px;top:8px;opacity:.9}
+.rc .car3d{width:118px;flex:none}
+.rc .g{display:inline-flex;gap:4px;align-items:center}
+.pc button{display:flex;align-items:center;justify-content:center}
+.where svg{flex:none}
+.bk{display:flex;align-items:center;justify-content:center}
+#menu{display:flex;align-items:center;justify-content:center}
+.cash{display:flex;align-items:center;justify-content:center;color:#0d3b0a}
+.st5{display:inline-flex;gap:1px;vertical-align:middle}
+.st5 .off{color:var(--line)}.st5 .on{color:#f5a623}.st5 .half{color:#f5a623;opacity:.55}
+.st5 span{display:inline-flex}
+.rr{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700}
+.of .t .rr{margin:2px 0}
+.avi{border-radius:50%;object-fit:cover;flex:none;background:var(--ava);display:inline-flex;align-items:center;justify-content:center;font-weight:800}
+.avi.ph{color:var(--tx)}
+.vb{display:inline-flex;vertical-align:-2px;color:#38a1ff;margin-left:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);border-radius:99px;padding:7px 12px;font-weight:700;font-size:13px}
+.chip.ok{background:color-mix(in srgb,#2ecc71 20%,transparent);color:#2ecc71}
+.chip.wn{background:color-mix(in srgb,#f5a623 22%,transparent);color:#f5a623}
+.chip.bd{background:color-mix(in srgb,var(--danger) 20%,transparent);color:var(--danger)}
+.vu{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:10px 0 4px}
+.vu h3{margin-top:6px}
+.rv{background:var(--card);border-radius:12px;padding:10px;margin:6px 0}.rv p{margin-top:4px;font-size:14px}
+.okc{width:60px;height:60px;border-radius:50%;background:color-mix(in srgb,#2ecc71 22%,transparent);color:#2ecc71;display:flex;align-items:center;justify-content:center;margin:4px auto}
+.pulse{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--acc);margin-right:8px;animation:pl 1.2s infinite}
+@keyframes pl{0%{box-shadow:0 0 0 0 var(--acc)}100%{box-shadow:0 0 0 12px transparent}}
+.plate.big{font-size:16px;padding:3px 10px}
+.stars button{color:var(--line);filter:none!important}.stars button.on{color:#f5a623}
+.stars button svg{display:block}
+.ta{height:70px;resize:none;font:600 15px Inter,sans-serif;width:100%;margin-top:4px}
+.kp{flex:1;margin:0;text-align:center}
+.dhd .of{flex:1;min-width:0}
+/* drawer */
+#dr .p{display:flex;flex-direction:column;padding:calc(18px + env(safe-area-inset-top)) 0 calc(14px + env(safe-area-inset-bottom));width:84%;max-width:340px}
+.dh{display:flex;align-items:center;gap:14px;padding:6px 18px 16px;cursor:pointer;border-bottom:1px solid var(--line2)}
+.dh b{font-size:19px;display:block}.dh .lm{flex:1;min-width:0}
+.dl{flex:1;overflow:auto;padding-top:6px}
+.dli{display:flex;align-items:center;gap:18px;padding:15px 18px;font-weight:700;font-size:18px;cursor:pointer;color:var(--tx)}
+.dli svg{color:var(--mut)}.dli.on{background:var(--card)}.dli:active{background:var(--card)}
+.df{padding:12px 18px 0;border-top:1px solid var(--line2)}
+.df .btn{display:flex;align-items:center;justify-content:center;gap:10px}
+.fl2{text-align:center;margin-top:12px;font-size:13px;color:var(--mut)}.fl2 a{cursor:pointer;text-decoration:underline}
+/* pages */
+#pg{position:fixed;inset:0;z-index:1100;background:var(--bgS);overflow:auto;-webkit-overflow-scrolling:touch}
+#pg .hd{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;margin:0;background:var(--bgS);border-bottom:1px solid var(--line2)}
+#pg .hd button{background:none;border:0;color:var(--tx);padding:8px;cursor:pointer;display:flex;border-radius:50%}
+#pg .hd h3{font-size:20px}
+#pgb{padding:6px 16px calc(40px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+#md{z-index:1300}#toast{z-index:1400}#dr{z-index:1050}
+.lg{background:var(--card);border-radius:18px;overflow:hidden}
+.lr{display:flex;align-items:center;gap:14px;padding:13px 14px;cursor:pointer;border-bottom:1px solid var(--line2)}
+.lr:last-child{border-bottom:0}.lr:active{background:var(--line2)}
+.lt{width:38px;height:38px;border-radius:11px;background:color-mix(in srgb,var(--tx) 9%,transparent);display:flex;align-items:center;justify-content:center;flex:none}
+.lm{flex:1;min-width:0}.lm b{display:block;font-size:16px;font-weight:700}.lm small{display:block;color:var(--mut);font-size:13px;font-weight:600;margin-top:1px}
+.ch{color:var(--mut)}
+.lr.dg .lt,.lr.dg b{color:var(--danger)}
+.lnk.out{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:18px}
+.pcard{display:flex;align-items:center;gap:14px;background:var(--card);border-radius:20px;padding:14px;cursor:pointer;margin-top:8px}
+.pcard .nm{font-size:19px}.pcard small{color:var(--mut);font-weight:600}
+.avbig{position:relative;background:none;border:0;padding:0;cursor:pointer;color:var(--tx)}
+.avbig .cam{position:absolute;right:0;bottom:2px;width:36px;height:36px;border-radius:50%;background:var(--acc);color:var(--accT);display:flex;align-items:center;justify-content:center;border:3px solid var(--bgS)}
+.fl{margin:12px 0}.fl label{display:block;font-weight:700;font-size:13px;color:var(--mut);margin:0 0 6px 4px}.fl label i{font-weight:600;font-style:normal;opacity:.8}
+.f .ico{color:var(--mut)}.f.dis{opacity:.65}
+.note{display:flex;gap:12px;align-items:center;background:var(--card);border-radius:16px;padding:14px;margin:10px 0;font-size:14px;font-weight:600;line-height:1.4}
+.note.ok{background:color-mix(in srgb,#2ecc71 16%,transparent);color:var(--tx)}.note.ok .ico{color:#2ecc71}
+.note.wn{background:color-mix(in srgb,#f5a623 16%,transparent)}.note.wn .ico{color:#f5a623}
+.note.bd,.note.dng{background:color-mix(in srgb,var(--danger) 16%,transparent)}.note.bd .ico,.note.dng .ico{color:var(--danger)}
+.note .btn.s{margin-left:auto;flex:none}
+.stat{display:flex;gap:8px;margin:10px 0}.stat div{flex:1;background:var(--card);border-radius:16px;padding:12px 6px;text-align:center}.stat b{display:block;font-size:20px;font-weight:800}.stat span{font-size:12px;color:var(--mut);font-weight:700}
+.hi .of .t{min-width:0}.hi .t b,.hi .t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.empty{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:50px 20px;color:var(--mut)}.empty p{font-size:18px;font-weight:800;color:var(--tx)}
+.btn.lft{display:flex;align-items:center;gap:12px;text-align:left;margin-top:8px}
+.btn .ico,.btn svg{vertical-align:-4px}
+a.btn.d,button.btn.d{display:flex;align-items:center;justify-content:center;gap:8px}
+.em{display:flex;gap:10px;margin:10px 0}.em a{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--card);border-radius:16px;padding:14px 6px;text-decoration:none;color:var(--tx)}.em a svg{color:var(--danger)}.em a span{font-weight:800;font-size:20px}
+.tips .tp{display:flex;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line2);font-size:14px;font-weight:600;line-height:1.4}.tips .tp:last-child{border-bottom:0}.tips .tp svg{color:#2ecc71;margin-top:2px}
+details.fq{border-bottom:1px solid var(--line2);padding:0 14px}details.fq:last-child{border-bottom:0}
+details.fq summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 0;font-weight:700;cursor:pointer;list-style:none}details.fq summary::-webkit-details-marker{display:none}
+details.fq p{padding:0 0 14px;color:var(--mut);font-size:14px;line-height:1.5;font-weight:500}
+details[open] summary svg{transform:rotate(180deg)}
+.lh{font-size:17px;font-weight:800;margin:22px 0 6px}.lp{font-size:14.5px;line-height:1.6;margin:6px 0;color:color-mix(in srgb,var(--tx) 88%,transparent)}
+.stp{display:flex;gap:12px;align-items:flex-start;margin:10px 0;font-size:15px;line-height:1.4}.stp b:first-child{width:26px;height:26px;border-radius:50%;background:var(--acc);color:var(--accT);display:flex;align-items:center;justify-content:center;flex:none;font-size:13px}
+.al{text-decoration:underline;cursor:pointer;color:var(--accX)}
+.hero{display:flex;justify-content:center}
+/* verification */
+.vsteps{background:var(--card);border-radius:18px;padding:6px 14px;margin:8px 0}
+.vs{display:flex;gap:12px;align-items:center;padding:11px 0;font-weight:600;font-size:14.5px;border-bottom:1px solid var(--line2)}.vs:last-child{border-bottom:0}.vs svg{color:var(--accX)}.vs.done svg{color:#2ecc71}
+.prog{height:6px;background:var(--line2);border-radius:9px;overflow:hidden;margin-top:6px}.prog i{display:block;height:100%;background:var(--acc);border-radius:9px;transition:width .3s}
+.upl{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:130px;border:2px dashed var(--line);border-radius:18px;color:var(--mut);font-weight:700;font-size:14px;cursor:pointer;position:relative;overflow:hidden;background:var(--card)}
+.upl.has{border-style:solid;border-color:var(--acc);min-height:0}.upl img{width:100%;max-height:230px;object-fit:cover;display:block}
+.upl .rt{position:absolute;right:10px;bottom:10px;background:#000a;color:#fff;border-radius:99px;padding:6px 10px;font-size:12px;display:flex;gap:5px;align-items:center}
+.vnav{display:flex;gap:10px;margin-top:20px}.vnav .btn{flex:1}.vnav .btn.d{flex:.5}
+.card.sm{font-size:14px}.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line2)}.kv:last-child{border-bottom:0}.kv span{color:var(--mut);font-weight:600}.kv b{text-align:right}
+.chk{display:flex;gap:12px;align-items:flex-start;margin:14px 0;font-size:14px;font-weight:600;line-height:1.45}.chk input{width:22px;height:22px;accent-color:var(--acc);flex:none;margin-top:1px}
+.adm{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.adm figure{margin:0}.adm img{width:100%;border-radius:10px;display:block}.adm figcaption{font-size:11px;color:var(--mut);font-weight:700;margin-top:3px}
+/* auth extras */
+.tos{display:flex;gap:10px;align-items:flex-start;font-size:13px;font-weight:600;line-height:1.4}.tos input{width:20px;height:20px;accent-color:#111;flex:none;margin-top:1px}.tos a{text-decoration:underline;cursor:pointer}
+#auth .legal{display:flex;justify-content:center;gap:6px;font-size:12px;font-weight:700;opacity:.85;margin-top:2px}#auth .legal a{text-decoration:underline;cursor:pointer}
+@media (min-width:700px){#sheet{left:50%;right:auto;width:520px;margin-left:-260px}}
+#auth .tos input{width:20px;height:20px;padding:0;border-radius:4px;flex:none}
 </style></head><body>
 <div id="map"></div>
 <iframe id="emb" hidden title="Map" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
@@ -150,7 +286,7 @@ body.dk-auth #err{color:#ff8a8a}
  <div id="sres"></div>
 </div>
 <div id="dr" hidden onclick="if(event.target===this)this.hidden=true"><div class="p" id="drp"></div></div>
-<div id="set" hidden><div class="hd"><button onclick="$('#set').hidden=true">←</button><h3>Settings</h3></div><div id="setb"></div></div>
+<div id="pg" hidden><div class="hd"><button id="pgback" onclick="pgBack()" aria-label="Back"></button><h3 id="pgt"></h3><span id="pgr" style="margin-left:auto"></span></div><div id="pgb"></div></div>
 <div id="md" hidden onclick="if(event.target===this)mdClose(null)"><div class="p" id="mdp"></div></div>
 <div id="auth">
  <div class="logo">Arn<span>Drive</span></div>
@@ -158,19 +294,19 @@ body.dk-auth #err{color:#ff8a8a}
  <div id="su" hidden style="display:flex;flex-direction:column;gap:10px">
   <div class="af"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><input id="nm" placeholder="Full name" autocomplete="name"></div>
   <div class="af"><svg class="ic" viewBox="0 0 24 24"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 005 5L15 12l5 2v4a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-2z"/></svg><input id="ph" placeholder="Phone (e.g. 0771234567)" type="tel" autocomplete="tel"></div>
-  <div class="af"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.6 3-6 7-6s7 2.4 7 6"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14.5c2.4.6 4 2.4 4 5.5"/></svg><select id="role" onchange="$('#dv').hidden=this.value!=='driver'"><option value="passenger">I need rides</option><option value="driver">I drive</option></select></div>
-  <div id="dv" hidden style="display:flex;flex-direction:column;gap:10px"><div class="af"><svg class="ic" viewBox="0 0 24 24"><path d="M3 16v-4l2-5h14l2 5v4"/><path d="M3 16h18v3H3zM6 19v2M18 19v2"/><circle cx="7.5" cy="13.5" r=".8"/><circle cx="16.5" cy="13.5" r=".8"/></svg><input id="car" placeholder="Car (e.g. White Honda Fit)"></div><div class="af"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10.5h2M10 10.5h2M14 10.5h4M6 14h12"/></svg><input id="pl" placeholder="Number plate"></div></div>
  </div>
  <div id="cred" style="display:flex;flex-direction:column;gap:10px">
   <div class="af"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input id="em" type="email" placeholder="Email" autocomplete="email"></div>
   <div class="af"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 018 0v3"/><circle cx="12" cy="15.5" r="1.2"/></svg><input id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><button class="eye" type="button" onclick="eye()" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
  </div>
+ <label class="tos" id="tos" hidden><input type="checkbox" id="tosc"><span>I agree to the <a onclick="showLegal('terms')">Terms &amp; Conditions</a> and <a onclick="showLegal('privacy')">Privacy Policy</a>.</span></label>
  <div id="err"></div>
  <button class="btn d" id="go" onclick="go()">Sign in</button>
  <div id="alt" style="display:flex;flex-direction:column;gap:10px"><div class="or">or</div><button class="gbtn" onclick="gsign()"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Continue with Google</button></div>
  <button class="lnk" id="tg" onclick="tgl()">New here? Create account</button>
  <button class="lnk" id="fg" onclick="forgot()" style="font-size:13px">Forgot password?</button>
  <button class="lnk" id="cx" hidden onclick="auth.signOut()">Cancel</button>
+ <div class="legal"><a onclick="showLegal('terms')">Terms</a> · <a onclick="showLegal('privacy')">Privacy Policy</a></div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -490,7 +626,7 @@ function applyPick(ll,name){
 function chooseOnMap(){closeSearch();stage='pickdrop';window._pd=null;paxView()}
 function pickView(){
  clrMap();$('#top').hidden=true;$('#pin').hidden=false;$('#loc').hidden=true;$('#pl').textContent='Destination';$('#pic').innerHTML=sq(FLAG);$('#pn').textContent='Move the map…';
- sh(`<button class="bk" onclick="stage='idle';paxView()">←</button><h3>Set destination</h3><p class="m">Drag the map so the pin sits on where you're going.</p><button class="btn" onclick="confPick()">Confirm destination</button>`);
+ sh(`<button class="bk" onclick="stage='idle';paxView()">${ic('chevL',24)}</button><h3>Set destination</h3><p class="m">Drag the map so the pin sits on where you're going.</p><button class="btn" onclick="confPick()">Confirm destination</button>`);
  if(!window._pd){const c=map.getCenter();window._pd={lat:c.lat(),lng:c.lng()};rev(window._pd).then(n=>{window._pdn=n;if(stage==='pickdrop')$('#pn').textContent=n})}
 }
 function confPick(){const ll=window._pd||{lat:map.getCenter().lat(),lng:map.getCenter().lng()};$('#pin').hidden=true;setDrop(ll,window._pdn||'Dropped pin')}
@@ -567,7 +703,7 @@ const step=s=>fx(R_.doc(ride.id).update({status:s}));
 async function dcancel(){
  const L=['Passenger not at pickup','Passenger asked me to cancel','Car problem','Too far / wrong location','Other'];
  const i=await modal('Why are you cancelling?',L);if(i===null)return;
- const id=ride.id;await fx(R_.doc(id).update({status:'open',driver:null,driverName:null,driverPhone:null,driverCar:null,driverPlate:null,dLoc:null,dHead:null,lastDriverCancel:L[i]}));
+ const id=ride.id;await fx(R_.doc(id).update({status:'open',driver:null,driverName:null,driverPhone:null,driverCar:null,driverPlate:null,driverPhoto:null,driverRating:null,driverRN:null,driverVerified:null,dLoc:null,dHead:null,lastDriverCancel:L[i]}));
  fx(R_.doc(id).collection('offers').doc(me.uid).delete());SENT[id]=0;toast('Pickup cancelled')}
 const tog=()=>{online=!online;drvIdle()};
 function drvIdle(){
@@ -595,6 +731,627 @@ async function offer(id,p){
  await fx(R_.doc(id).collection('offers').doc(me.uid).set({driver:me.uid,name:me.name,phone:me.phone,car:me.car,plate:me.plate,price:p,eta:r?eta(r.d):null,ts:TS()}));
  SENT[id]=p;drawReqs();
 }
+/* ============ LEGAL TEXT ============ */
+const LEGAL={
+terms:{title:'Terms & Conditions',intro:'Please read these Terms carefully. By creating an account or using {app} you agree to them.',s:[
+['1. Who we are and what {app} is',['{app} is a ride-hailing platform that connects people who need a ride ("Passengers") with independent drivers ("Drivers") in Zimbabwe. {app} is operated by {company} ("we", "us", "our").','{app} is a technology platform only. We do not own vehicles, we do not employ Drivers, and we do not provide transport services ourselves. The transport service is provided by the Driver, who is an independent operator.']],
+['2. Accepting these Terms',['By tapping "Create account", "Continue with Google", "Sign in" or by using the app in any way, you confirm that you have read, understood and agreed to these Terms and to our Privacy Policy.','If you do not agree, do not use {app}. We may update these Terms from time to time. If a change is important we will tell you in the app. Continuing to use {app} after a change means you accept it.']],
+['3. Eligibility',['You must be at least 18 years old and legally able to enter a contract to hold an account.','Drivers must also hold a valid Zimbabwean driver\'s licence appropriate for carrying passengers, be the owner or authorised user of the vehicle, and meet every requirement of Zimbabwean law that applies to operating a passenger vehicle (including vehicle registration, a valid licence disc, roadworthiness and insurance).','You may only keep one account. You may not let anyone else use your account.']],
+['4. Your account',['You must give true, accurate and current information (name, phone number, profile photo, and for Drivers the licence and vehicle details) and keep it up to date.','You are responsible for everything done through your account and for keeping your password and device secure. Tell us straight away if you think your account has been misused.','Your profile photo must be a clear photo of you. Do not use another person\'s photo, a logo or an offensive image. Your name, photo and rating are shown to the other person on a trip.']],
+['5. Passenger and Driver modes',['One account can be used in Passenger mode and, once approved, in Driver mode. You can switch between modes in the app when you do not have an active trip.','You cannot switch modes during a trip.']],
+['6. Driver verification',['To use Driver mode you must complete verification. We ask for your profile photo, a selfie, your driver\'s licence details and photo, your vehicle details and photo, and your vehicle registration (and insurance where we ask for it).','We review the information and may approve, reject or ask for more. We may check the information with third parties and may repeat checks at any time. Approval is not a guarantee of work, and does not mean we endorse the Driver.','You must tell us at once if your licence is suspended or expires, your vehicle becomes unroadworthy or uninsured, or anything else changes. Providing false or altered documents will lead to permanent removal and may be reported to the police.']],
+['6A. Verified badge',['A "Verified" badge means we have reviewed the documents submitted at the time of approval. It is not a promise about a Driver\'s conduct or the safety of a trip.']],
+['7. Requesting and accepting a ride',['A Passenger enters a pickup point and destination and proposes a fare. Drivers who are online may accept the fare or counter with a different fare. The Passenger chooses whether to accept an offer. Once the Passenger accepts, the trip is agreed between the Passenger and that Driver.','Fares are agreed between the Passenger and Driver. Suggested fares shown in the app are estimates only, based on distance, and are not binding. Route and arrival times are estimates and can change with traffic and road conditions.','If you set "Auto-accept", the app will accept the lowest offer at or below the fare you set. You are responsible for any fare you set.']],
+['8. Payment',['Unless the app clearly says otherwise, payment is made in cash directly to the Driver at the end of the trip, in the amount agreed in the app. {app} does not currently collect fares and is not a party to the payment.','Passengers must pay the agreed fare. Drivers must not ask for more than the agreed fare unless the Passenger freely agrees to a change (for example a longer route requested by the Passenger or extra waiting time).','If we later offer card or mobile-money payments, additional payment terms will be shown before you use them.']],
+['9. Cancellations',['Passengers and Drivers may cancel a request or an accepted trip. When you cancel an accepted trip you will be asked for a reason. Repeated or abusive cancellations (for example cancelling after a Driver has already driven to the pickup point, or a Driver repeatedly cancelling accepted trips) may lead to warnings, limits on your account or suspension.','We may in future introduce cancellation fees. If we do, we will show them to you before you request a ride.']],
+['10. Conduct and safety',['Everyone using {app} must treat others with respect. You must not:','• harass, threaten, discriminate against, assault or endanger anyone;','• carry out or encourage anything illegal, including carrying illegal goods or drugs;','• drive or ride while under the influence of alcohol or drugs;','• exceed the vehicle\'s legal passenger limit or drive in an unsafe way;','• use the app to stalk, track or contact a person for any purpose other than the trip;','• record or share other people\'s personal information without a lawful reason;','• damage a vehicle or leave a vehicle in a dirty or unsafe condition;','• manipulate ratings, create fake accounts, or misuse the app, its code or its data.','Drivers must obey all traffic laws and keep their vehicle roadworthy, clean and insured. Passengers must wear seat belts where fitted.','If you are in danger, call the emergency services first. Contact numbers are in the app under Safety.']],
+['11. Ratings and reviews',['After a trip, Passengers and Drivers may rate each other from 1 to 5 stars and may leave a comment. Ratings and comments must be honest, relevant and respectful. They may be shown to other users and may be used to decide whether an account is allowed to continue.','We may remove ratings or comments that are abusive, false or break these Terms.']],
+['12. Photos and content you upload',['You keep ownership of the photos and information you upload, but you give us a non-exclusive, worldwide, royalty-free licence to store, process and show them to other users for the purpose of operating {app} (for example showing your photo on a ride request or driver offer). This licence ends when you delete the content or your account, except for copies we must keep by law or for legitimate safety reasons.','You promise you have the right to upload what you upload.']],
+['13. Lost property and incidents',['If you leave something in a vehicle, contact the Driver through the app. We cannot guarantee that items will be returned.','If something goes wrong on a trip, please report it to us as soon as possible using the Help and support section, and to the police where appropriate.']],
+['14. Location and communications',['{app} needs your device location to work. Passengers share their pickup point; Drivers share live location while online and during a trip. See the Privacy Policy for details.','By using {app} you agree that we, and the other person on your trip, may contact you by phone call or in-app messages about the trip.']],
+['15. Suspension and ending your account',['We may warn, limit, suspend or close your account if you break these Terms, if we believe the safety of others is at risk, if we are required to by law, or if we reasonably believe the account is being used fraudulently.','You may stop using {app} at any time and delete your account in Settings > Privacy & data. Some information may be kept for a limited period where the law or our legitimate interests require (see the Privacy Policy).']],
+['16. Our responsibility',['We work to keep {app} available and accurate, but we provide it "as is" and "as available". We do not promise that it will always be uninterrupted, error-free or that a driver will always be available.','Because the transport is provided by independent Drivers, we are not responsible for the actions, conduct or vehicles of Drivers or Passengers. To the fullest extent allowed by law, we are not liable for indirect or consequential loss, loss of profit, or loss arising from your use of or inability to use {app}.','Nothing in these Terms limits any liability that cannot be limited by law, including the rights you have under the Consumer Protection Act of Zimbabwe.']],
+['17. Your responsibility',['You are responsible for your own conduct and for any loss or damage you cause. You agree to compensate us for loss, claims or costs caused by your breach of these Terms or of the law, to the extent the law allows.','Drivers are responsible for their own taxes, licences, permits, insurance and any other legal obligations that apply to the transport they provide.']],
+['18. Intellectual property',['The {app} name, logo, design, software and other content (except your own content) belong to us or our licensors. You may not copy, modify, reverse-engineer or resell any part of {app}.']],
+['19. Third-party services',['{app} uses services provided by others, including Google Maps, Google Places, Google Sign-In and Google Firebase. Their terms and privacy policies also apply when you use those features.']],
+['20. Complaints and disputes',['If you have a complaint, contact us first at {email}. We will try to resolve it quickly and fairly.','These Terms are governed by the laws of Zimbabwe. If a dispute cannot be resolved informally, it will be decided by the competent courts of Zimbabwe.']],
+['21. General',['If any part of these Terms is found to be unenforceable, the rest remains in force. If we do not enforce a right straight away, that does not mean we have given it up. You may not transfer your rights under these Terms to anyone else. These Terms, together with the Privacy Policy, are the full agreement between you and us about {app}.']],
+['22. Contact',['{company}','Email: {email}','Address: {address}']]
+]},
+privacy:{title:'Privacy Policy',intro:'This Privacy Policy explains what personal information {app} collects, why we collect it, how we use and protect it, and the choices and rights you have. We handle personal information in line with Zimbabwe\'s Cyber and Data Protection Act [Chapter 12:07] and other applicable law.',s:[
+['1. Who is responsible for your information',['{company} ("we", "us") is the data controller for personal information processed through {app}.','Contact for privacy questions and requests: {email}.']],
+['2. Information we collect',['Information you give us:','• Account details: name, phone number, email address, password (stored by our sign-in provider in hashed form, we cannot read it), and the sign-in method you use (email or Google).','• Profile: your profile photo (and a smaller copy used on ride requests and offers).','• Driver verification (Drivers only): selfie, driver\'s licence number, licence expiry date and licence photo(s), vehicle make, model, colour, year, number plate, a photo of the vehicle, and vehicle registration (and, where requested, insurance) documents.','• Ride information: the fare you propose, notes to your driver, ratings and comments you give or receive, and your messages to support.','Information collected when you use the app:','• Location: your device location. Passengers share a pickup point when requesting a ride. Drivers share live location while online and during a trip. We do not track your location when the app is closed.','• Trip data: pickup and destination addresses and coordinates, distance, status changes (requested, accepted, arrived, started, completed, cancelled), time stamps and the reason for any cancellation.','• Device and technical data: browser type, language, theme and preference settings (stored on your device), and error information.','Information from others:','• The other person on your trip (for example a rating or comment) and our sign-in provider (for example your name and email from your Google account if you choose Google Sign-In).']],
+['3. How we use your information',['We use your information to:','• create and manage your account and sign you in;','• match Passengers with Drivers, show requests, offers and the trip on the map, and let you call each other;','• show your name, profile photo, rating and (for Drivers) vehicle and number plate to the other person on a trip so you can recognise each other;','• verify Drivers and keep the platform safe, prevent fraud and misuse, and investigate complaints and incidents;','• calculate and show estimated routes, distances and fares;','• calculate and display ratings;','• provide help and support and send service messages;','• improve, maintain and secure {app};','• comply with the law and respond to lawful requests from authorities.','We do not sell your personal information. We do not use your photos or documents for advertising.']],
+['4. Legal bases (why we are allowed to use it)',['We process personal information because it is necessary to provide the service you asked for (contract), because you have given consent (for example for location access, camera or photo access, and notifications), because we have legitimate interests in safety, security and fraud prevention, and because we must meet legal obligations.','Where we rely on consent you can withdraw it at any time (for example by turning off location in your device settings, or deleting your account). Withdrawing consent may mean some parts of {app} stop working.']],
+['5. Who we share information with',['Other users on a trip. When a trip is agreed, the Passenger and Driver can see each other\'s name, photo, rating, phone number (to call), pickup and destination, and live location during the trip. Drivers also see a Passenger\'s name, photo, rating, pickup and destination on ride requests before accepting. Passengers see a Driver\'s name, photo, rating, vehicle, number plate, verified status and estimated arrival time on offers.','Service providers who help us run {app}, who may only use the data for our purposes:','• Google Firebase (Authentication and Cloud Firestore) to store accounts, profiles, rides and verification documents;','• Google Maps Platform (Maps, Places, Routes, Geocoding) to show maps, search places and calculate routes;','• Google Sign-In if you choose to sign in with Google;','• OpenStreetMap Nominatim as a backup address search if Google services are unavailable.','Authorities and legal reasons. We may disclose information to the police, courts or regulators when the law requires it, or to protect the safety and rights of people or the platform.','Business changes. If {app} is sold or merged, your information may transfer to the new owner, who must continue to protect it under this Policy.','Driver verification documents are only visible to you and to authorised {app} reviewers. They are not shown to Passengers.']],
+['6. Where your information is stored',['Our service providers (such as Google) may store and process information on servers outside Zimbabwe. When information is transferred abroad we take reasonable steps to make sure it is protected to a standard comparable to Zimbabwean law, for example through our providers\' security commitments and contractual safeguards.']],
+['7. How long we keep information',['• Account and profile: for as long as you have an account.','• Trip records and ratings: kept for a reasonable period for safety, dispute resolution, accounting and legal needs, then deleted or anonymised.','• Driver verification documents: kept while you are an active Driver and for a reasonable period afterwards where needed for safety or legal reasons, then deleted.','• Live location: used during a trip; the last known position is kept with the trip record.','When you delete your account we delete your profile, photo and verification documents. We may keep limited trip records (for example the trip and its rating) where we need them for safety, legal or dispute reasons, in a form that is no longer linked to your profile where possible.']],
+['8. Security',['We use industry-standard protections including encrypted connections (HTTPS), access rules so that users can only reach what they are allowed to, and restricted access to verification documents. No system is perfectly secure. Keep your password private, use a strong password, and sign out on shared devices. Tell us immediately if you think your account has been accessed without permission.']],
+['9. Your rights',['Under the Cyber and Data Protection Act and other applicable law you may have the right to:','• be told how your information is used (this Policy);','• access the information we hold about you;','• correct information that is wrong or incomplete;','• delete your information, subject to legal limits;','• object to or restrict certain uses;','• withdraw consent;','• complain to the Cyber and Data Protection authority (the Zimbabwe Posts and Telecommunications Regulatory Authority, POTRAZ, acts as the data protection authority) if you think your rights have been breached.','In the app you can: edit your profile and photo (Settings > Personal info), download a copy of your data (Settings > Privacy & data), and delete your account (Settings > Privacy & data). You can also email {email}. We may need to confirm your identity before acting on a request.']],
+['10. Photos, camera and permissions',['The app asks for permission before using your camera, photos, location or notifications. You can change these permissions in your device or browser settings at any time. If you refuse camera or photo access you will not be able to upload a profile photo or complete Driver verification.']],
+['11. Local storage and similar technologies',['{app} stores small amounts of information on your device (for example your chosen theme, preferences, recent places and a login session) so that it works properly. We do not use advertising cookies. If you clear your browser data these settings will reset.']],
+['12. Children',['{app} is for people aged 18 and over. We do not knowingly collect information from children. If you believe a child has an account, contact us and we will remove it.']],
+['13. Changes to this Policy',['We may update this Policy. When we make an important change we will notify you in the app. The "Last updated" date at the top shows when it was last changed.']],
+['14. Contact us',['{company}','Email: {email}','Address: {address}']]
+]}};
+const lg=t=>String(t).replace(/\{app\}/g,APP.name).replace(/\{company\}/g,APP.company).replace(/\{email\}/g,APP.email).replace(/\{address\}/g,APP.address);
+
+/* ============ APP CONFIG (edit these) ============ */
+const APP={name:'ArnDrive',company:'ArnDrive',email:'support@arndrive.co.zw',address:'Harare, Zimbabwe',updated:'9 November 2026',version:'3.0'};
+const IMG_RIDE='data:image/webp;base64,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';
+const IMG_CITY='data:image/webp;base64,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';
+const carImg=(t,w)=>`<img class="car3d" ${w?`style="width:${w}px"`:''} alt="${t==='c2c'?'City to city':'Ride'} car" src="${t==='c2c'?IMG_CITY:IMG_RIDE}">`;
+
+/* ============ MODERN ICONS ============ */
+const ICO={
+menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+home:'<path d="M3 11.5L12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/>',
+car:'<path d="M3 15v-3.5L5.2 7A2 2 0 017 6h10a2 2 0 011.8 1l2.2 4.5V15"/><rect x="2.5" y="15" width="19" height="3.5" rx="1.5"/><circle cx="7" cy="12.2" r=".9"/><circle cx="17" cy="12.2" r=".9"/><path d="M5 18.5V20M19 18.5V20"/>',
+clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>',
+globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.8 2.6 4 5.6 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.6-4-9s1.2-6.4 4-9z"/>',
+bell:'<path d="M6 16v-5a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 004 0"/>',
+shield:'<path d="M12 3l8 3v6c0 4.6-3.2 8-8 9.5C7.2 20 4 16.6 4 12V6z"/>',
+shieldcheck:'<path d="M12 3l8 3v6c0 4.6-3.2 8-8 9.5C7.2 20 4 16.6 4 12V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
+gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
+info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r=".7" fill="currentColor"/>',
+help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.6-1.5 1.1-1.5 2.2"/><circle cx="12" cy="17" r=".7" fill="currentColor"/>',
+chat:'<path d="M4 5.5h16v11H9.5L5 20v-3.5H4z"/><path d="M8 10h8M8 13h5"/>',
+headset:'<path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="3" y="14" width="4" height="6" rx="2"/><rect x="17" y="14" width="4" height="6" rx="2"/><path d="M19 20c0 1.3-1.6 2-4 2"/>',
+user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+users:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.6 3-6 7-6s7 2.4 7 6"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14.5c2.4.6 4 2.4 4 5.5"/>',
+phone:'<path d="M5 3h4l2 5-2.5 1.5a11 11 0 005 5L15 12l5 2v4a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-2z"/>',
+mail:'<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>',
+lock:'<rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 018 0v3"/><circle cx="12" cy="15.5" r="1.2"/>',
+key:'<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
+camera:'<path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+image:'<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/>',
+star:'<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/>',
+check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+chevR:'<path d="M9 5l7 7-7 7"/>',chevL:'<path d="M15 5l-7 7 7 7"/>',chevD:'<path d="M5 9l7 7 7-7"/>',
+x:'<path d="M6 6l12 12M18 6L6 18"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',
+nav:'<path d="M3 11l18-8-8 18-2-8z"/>',
+note:'<path d="M5 3.5h10l4 4V20.5H5z"/><path d="M9 12h6M9 16h4"/>',
+file:'<path d="M6 3.5h8l4 4V20.5H6z"/><path d="M14 3.5v4h4M9 12h6M9 15.5h6"/>',
+swap:'<path d="M7 7h12l-3-3M17 17H5l3 3"/>',
+palette:'<path d="M12 3a9 9 0 100 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 004-4c0-4.2-4-7.8-9-7.8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7.2" r="1"/><circle cx="15" cy="7.2" r="1"/>',
+phoneVib:'<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/><path d="M3.5 9v6M20.5 9v6"/>',
+volume:'<path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4.5 4.5 0 010 6M18 6.5a8 8 0 010 11"/>',
+zap:'<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
+trash:'<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/>',
+download:'<path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 20h14"/>',
+upload:'<path d="M12 16V5M7.5 9L12 4.5 16.5 9M5 20h14"/>',
+share:'<circle cx="6" cy="12" r="2.5"/><circle cx="17.5" cy="6" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/><path d="M8.2 10.8l7-3.6M8.2 13.2l7 3.6"/>',
+idcard:'<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="11" r="2"/><path d="M5.5 16c.5-1.8 1.7-2.6 3-2.6s2.5.8 3 2.6M14 10h4M14 13.5h3"/>',
+logout:'<path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/>',
+pin:'<path d="M12 21s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+flag:'<path d="M6 21V4M6 5h12l-2.5 4 2.5 4H6"/>',
+wallet:'<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M16 14.5h2"/>',
+edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+alert:'<path d="M12 4l9 16H3z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.3" r=".7" fill="currentColor"/>',
+luggage:'<rect x="6" y="7" width="12" height="13" rx="2.5"/><path d="M9.5 7V4.5h5V7M10 11v5M14 11v5"/>',
+sliders:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+install:'<rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M12 8v6M9.5 11.5L12 14l2.5-2.5"/>',
+heart:'<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.5a4.3 4.3 0 017.5 2.3C19.5 15.4 12 20 12 20z"/>',
+siren:'<path d="M6 18v-5a6 6 0 0112 0v5"/><path d="M4 18h16v3H4zM12 3v2M4.5 6l1.4 1.4M19.5 6l-1.4 1.4"/>',
+trophy:'<path d="M8 4h8v6a4 4 0 01-8 0zM8 6H4.5a3 3 0 003.5 4M16 6h3.5a3 3 0 01-3.5 4M12 14v4M8.5 20h7"/>',
+calendar:'<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+refresh:'<path d="M20 11a8 8 0 00-14-4L4 9M4 4v5h5M4 13a8 8 0 0014 4l2-2M20 20v-5h-5"/>'
+};
+const ic=(n,s,c)=>`<svg class="ico ${c||''}" viewBox="0 0 24 24" width="${s||22}" height="${s||22}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[n]||''}</svg>`;
+const icf=(n,s,c)=>ic(n,s,c).replace('fill="none"','fill="currentColor"');
+const stars5=(v,s)=>`<span class="st5">${[1,2,3,4,5].map(i=>`<span class="${v>=i-.25?'on':v>=i-.75?'half':'off'}">${icf('star',s||14)}</span>`).join('')}</span>`;
+const rateTxt=(r)=>r&&r.n?`${r.avg.toFixed(2)} <span class="mm">(${r.n})</span>`:'<span class="mm">New</span>';
+const avt=(photo,name,sz,cls)=>{sz=sz||46;return photo?`<img class="avi ${cls||''}" style="width:${sz}px;height:${sz}px" src="${photo}" alt="">`:`<span class="avi ph ${cls||''}" style="width:${sz}px;height:${sz}px;font-size:${Math.round(sz*.42)}px">${esc((name||'?')[0]).toUpperCase()}</span>`};
+const vbadge=()=>`<span class="vb" title="Verified driver">${ic('shieldcheck',15)}</span>`;
+
+/* ============ SOUND / ALERTS ============ */
+let _ac;function beep(){try{const P=prefs();if(!P.snd)return;_ac=_ac||new(window.AudioContext||window.webkitAudioContext)();const o=_ac.createOscillator(),g=_ac.createGain();o.frequency.value=880;o.type='sine';g.gain.value=.06;o.connect(g);g.connect(_ac.destination);o.start();o.stop(_ac.currentTime+.18)}catch(e){}}
+function alertUser(msg){toast(msg);beep();try{if(prefs().push&&document.hidden&&window.Notification&&Notification.permission==='granted')new Notification(APP.name,{body:msg,icon:'icon-192.png'})}catch(e){}}
+
+/* ============ PHOTOS ============ */
+function pickFile(capture){return new Promise(res=>{const i=document.createElement('input');i.type='file';i.accept='image/*';if(capture)i.setAttribute('capture',capture);i.style.display='none';document.body.appendChild(i);i.onchange=()=>{res(i.files[0]||null);i.remove()};i.click()})}
+function loadImg(file){return new Promise((res,rej)=>{const r=new FileReader();r.onerror=rej;r.onload=()=>{const im=new Image();im.onerror=rej;im.onload=()=>res(im);im.src=r.result};r.readAsDataURL(file)})}
+async function squareJpeg(file,size,q){const im=await loadImg(file),s=Math.min(im.width,im.height),sx=(im.width-s)/2,sy=(im.height-s)/2,c=document.createElement('canvas');c.width=c.height=size;c.getContext('2d').drawImage(im,sx,sy,s,s,0,0,size,size);return c.toDataURL('image/jpeg',q)}
+async function fitJpeg(file,max,q){const im=await loadImg(file),k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);return c.toDataURL('image/jpeg',q)}
+async function changePhoto(capture){
+ const f=await pickFile(capture);if(!f)return;
+ try{const big=await squareJpeg(f,320,.8),sm=await squareJpeg(f,96,.7);await db.collection('users').doc(me.uid).update({photo:big,photoS:sm});me.photo=big;me.photoS=sm;toast('Profile photo updated');pgRefresh()}catch(e){toast('Could not use that photo. Try another one.')}
+}
+
+/* ============ RATINGS ============ */
+let MYD=null,MYP=null;
+async function ratingOf(uid,as){
+ const s=await R_.where(as==='driver'?'driver':'pax','==',uid).get();let sum=0,n=0,trips=0;const rev=[];
+ s.forEach(d=>{const r=d.data();if(r.status==='done')trips++;const v=as==='driver'?r.rating:r.paxRating;if(v>0){sum+=v;n++;const t=as==='driver'?r.ratingNote:r.paxNote;if(t)rev.push({v,t,by:as==='driver'?r.paxName:r.driverName,at:(r.created&&r.created.seconds)||0})}});
+ rev.sort((a,b)=>b.at-a.at);return{avg:n?sum/n:0,n,trips,rev:rev.slice(0,8)}}
+const drvStatus=u=>(u||me).dstatus&&(u||me).dstatus!=='none'?(u||me).dstatus:(((u||me).car&&(u||me).plate&&(u||me).role==='driver')?'verified':'none');
+const isVerified=u=>drvStatus(u)==='verified';
+async function viewUser(uid,as){
+ if(!uid)return;$('#mdp').innerHTML='<p class="m">Loading…</p>';$('#md').hidden=false;
+ try{const [us,r]=await Promise.all([db.collection('users').doc(uid).get(),ratingOf(uid,as)]);const u=us.data()||{};
+  const since=u.created&&u.created.seconds?new Date(u.created.seconds*1000).toLocaleDateString('en-GB',{month:'long',year:'numeric'}):'';
+  $('#mdp').innerHTML=`<div class="vu">${avt(u.photo||u.photoS,u.name,92)}<h3>${esc(u.name||'User')} ${as==='driver'&&isVerified(u)?vbadge():''}</h3><div class="rr">${stars5(r.avg,18)}<b>${rateTxt(r)}</b></div>
+  <div class="chips"><span class="chip">${ic('car',15)} ${r.trips} trip${r.trips===1?'':'s'}</span>${since?`<span class="chip">${ic('calendar',15)} Since ${since}</span>`:''}${as==='driver'&&isVerified(u)?`<span class="chip ok">${ic('shieldcheck',15)} Verified driver</span>`:''}</div>
+  ${as==='driver'&&u.car?`<div class="card" style="width:100%;text-align:left"><div class="of">${carImg('ride',74)}<div class="t"><b>${esc(u.car)}</b><span class="m" style="margin:0"><span class="plate">${esc(u.plate||'')}</span></span></div></div></div>`:''}
+  ${r.rev.length?`<div style="width:100%;text-align:left"><div class="sec" style="margin-top:6px">Recent comments</div>${r.rev.slice(0,3).map(x=>`<div class="rv">${stars5(x.v,12)}<p>${esc(x.t)}</p></div>`).join('')}</div>`:''}
+  <button class="btn d" style="margin-top:10px" onclick="mdClose(null)">Close</button></div>`}catch(e){$('#mdp').innerHTML='<p class="m">Could not load this profile.</p><button class="btn d" onclick="mdClose(null)">Close</button>'}}
+
+/* ============ PAGES (full-screen) ============ */
+const PGS=[];
+function pgOpen(fn,a){PGS.push([fn,a||[]]);pgRender()}
+function pgBack(){PGS.pop();if(PGS.length)pgRender();else $('#pg').hidden=true}
+function pgClose(){PGS.length=0;$('#pg').hidden=true;$('#dr').hidden=true}
+function pgRefresh(){if(PGS.length&&!$('#pg').hidden){const y=$('#pg').scrollTop;pgRender();$('#pg').scrollTop=y}}
+function pgRender(){const [fn,a]=PGS[PGS.length-1];$('#pg').hidden=false;$('#dr').hidden=true;$('#pgr').innerHTML='';fn(...a);}
+function pgSet(title,html,right){$('#pgt').innerHTML=title;$('#pgb').innerHTML=html;$('#pgr').innerHTML=right||'';$('#pg').scrollTop=0}
+const row=(icn,t,sub,on,right,danger)=>`<div class="lr ${danger?'dg':''}" onclick="${on}"><span class="lt">${ic(icn,20)}</span><div class="lm"><b>${t}</b>${sub?`<small>${sub}</small>`:''}</div>${right===undefined?ic('chevR',18,'ch'):right}</div>`;
+const swt=(k,v)=>`<button class="sw ${v?'on':''}" onclick="event.stopPropagation();setPref('${k}',this)"></button>`;
+function setPref(k,el){const P=prefs();P[k]=!P[k];lsS('ad_pref',JSON.stringify(P));el.classList.toggle('on',P[k]);if(k==='auto')auto=P.auto;
+ if(k==='push'&&P.push&&window.Notification&&Notification.permission==='default')Notification.requestPermission().then(r=>{if(r!=='granted'){P.push=false;lsS('ad_pref',JSON.stringify(P));el.classList.remove('on');toast('Notifications are blocked in your browser settings.')}});
+ if(k==='push'&&P.push&&!window.Notification){P.push=false;lsS('ad_pref',JSON.stringify(P));el.classList.remove('on');toast('Notifications are not supported on this device.')}}
+function prefs(){try{return Object.assign({vib:true,snd:true,push:false,auto:false},JSON.parse(lsG('ad_pref')||'{}'))}catch(e){return{vib:true,snd:true,push:false,auto:false}}}
+
+/* --- Settings main --- */
+let INST=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();INST=e});
+window.addEventListener('appinstalled',()=>{INST=null;toast('ArnDrive installed')});
+const standalone=()=>(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone;
+function installApp(){
+ if(INST){INST.prompt();INST.userChoice.finally(()=>{INST=null;pgRefresh()});return}
+ const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+ $('#mdp').innerHTML=`<h3 style="margin-bottom:8px">Install ${APP.name}</h3>${ios?`<p class="m">On iPhone or iPad:</p><div class="stp"><b>1</b><span>Tap the <b>Share</b> button ${ic('share',16)} at the bottom of Safari.</span></div><div class="stp"><b>2</b><span>Scroll and tap <b>Add to Home Screen</b>.</span></div><div class="stp"><b>3</b><span>Tap <b>Add</b>. ${APP.name} now opens like a normal app.</span></div>`:`<p class="m">Open your browser menu (⋮) and choose <b>Install app</b> or <b>Add to Home screen</b>.</p><p class="m">If you do not see it, open this page in Chrome or Edge and make sure the site is loaded over HTTPS.</p>`}<button class="btn" onclick="mdClose(null)">Got it</button>`;$('#md').hidden=false}
+function pgSettings(){
+ const st=drvStatus(),isD=me.role==='driver';
+ const rr=isD?MYD:MYP;
+ pgSet('Settings',`
+ <div class="pcard" onclick="pgOpen(pgProfile)">${avt(me.photo||me.photoS,me.name,64)}<div class="lm"><b class="nm">${esc(me.name)} ${isD&&isVerified()?vbadge():''}</b><div class="rr">${stars5(rr?rr.avg:0,14)}<span>${rateTxt(rr)}</span></div><small>${isD?'Driver mode':'Passenger mode'}</small></div>${ic('chevR',18,'ch')}</div>
+ <div class="sec">Account</div><div class="lg">
+ ${row('user','Personal info','Name, phone, photo, password',"pgOpen(pgAccount)")}
+ ${row('idcard',st==='verified'?'Driver account':'Become a driver',st==='verified'?'Vehicle &amp; documents':st==='pending'?'Verification under review':st==='rejected'?'Verification needs attention':'Verify your documents to start earning',"pgOpen(pgDriver)",st==='verified'?`<span class="chip ok">${ic('check',13)} Verified</span>`:st==='pending'?'<span class="chip wn">Pending</span>':st==='rejected'?'<span class="chip bd">Action needed</span>':undefined)}
+ ${row('swap',isD?'Switch to passenger mode':'Switch to driver mode',isD?'Request rides':'Accept ride requests',"switchMode()")}
+ </div>
+ <div class="sec">Preferences</div><div class="lg">
+ ${row('palette','Appearance','Theme: '+((window._themeSel==='auto')?'Auto':(THEMES[THEME_ID]||{}).n),"pgOpen(pgAppearance)")}
+ ${row('bell','Notifications &amp; sound','Alerts, vibration, auto-accept',"pgOpen(pgNotif)")}
+ </div>
+ <div class="sec">Safety &amp; privacy</div><div class="lg">
+ ${row('shield','Safety center','Emergency numbers and trip safety',"pgOpen(pgSafety)")}
+ ${row('lock','Privacy &amp; data','Download or delete your data',"pgOpen(pgPrivacy)")}
+ </div>
+ <div class="sec">Support</div><div class="lg">
+ ${row('help','Help &amp; support','FAQs and contact',"pgOpen(pgHelp)")}
+ ${standalone()?'':row('install','Install app','Add '+APP.name+' to your home screen',"installApp()")}
+ ${row('info','About','Version '+APP.version,"pgOpen(pgAbout)")}
+ </div>
+ <div class="sec">Legal</div><div class="lg">
+ ${row('file','Terms &amp; Conditions','',"pgOpen(pgLegal,['terms'])")}
+ ${row('shield','Privacy Policy','',"pgOpen(pgLegal,['privacy'])")}
+ </div>
+ ${me.admin?`<div class="sec">Admin</div><div class="lg">${row('shieldcheck','Driver reviews','Approve or reject new drivers',"pgOpen(pgAdmin)")}</div>`:''}
+ <button class="lnk out" onclick="pgClose();auth.signOut()">${ic('logout',18)} Sign out</button>
+ <p class="m" style="text-align:center">${APP.name} · v${APP.version}</p>`)}
+function showSettings(){PGS.length=0;pgOpen(pgSettings)}
+
+/* --- Profile --- */
+async function pgProfile(){
+ const isD=me.role==='driver';
+ pgSet('My profile','<p class="m">Loading…</p>');
+ const [rp,rd]=await Promise.all([ratingOf(me.uid,'pax').catch(()=>({avg:0,n:0,trips:0,rev:[]})),(isVerified()?ratingOf(me.uid,'driver'):Promise.resolve(null)).catch(()=>null)]);
+ MYP=rp;if(rd)MYD=rd;
+ const r=isD&&rd?rd:rp,since=me.created&&me.created.seconds?new Date(me.created.seconds*1000).toLocaleDateString('en-GB',{month:'long',year:'numeric'}):'';
+ const rv=(isD&&rd?rd.rev:rp.rev);
+ pgSet('My profile',`<div class="vu">
+ <button class="avbig" onclick="photoMenu()">${avt(me.photo||me.photoS,me.name,120)}<span class="cam">${ic('camera',18)}</span></button>
+ <h3>${esc(me.name)} ${isD&&isVerified()?vbadge():''}</h3>
+ <div class="rr">${stars5(r.avg,20)}<b>${rateTxt(r)}</b></div>
+ <div class="chips"><span class="chip">${ic('car',15)} ${r.trips} trip${r.trips===1?'':'s'}</span>${since?`<span class="chip">${ic('calendar',15)} Since ${since}</span>`:''}<span class="chip">${ic(isD?'idcard':'user',15)} ${isD?'Driver':'Passenger'}</span>${isVerified()?`<span class="chip ok">${ic('shieldcheck',15)} Verified</span>`:''}</div>
+ </div>
+ ${!me.photo&&!me.photoS?`<div class="note">${ic('camera',18)}<span>Add a profile photo so drivers and passengers can recognise you.</span><button class="btn s" onclick="photoMenu()">Add photo</button></div>`:''}
+ <div class="lg">${row('user','Edit personal info','',"pgOpen(pgAccount)")}${isD||isVerified()?row('car','Vehicle &amp; documents',esc(me.car||''),"pgOpen(pgDriver)"):''}</div>
+ <div class="sec">Ratings &amp; comments</div>
+ ${rv.length?rv.map(x=>`<div class="card"><div class="row" style="margin:0">${stars5(x.v,14)}<span class="mm">${esc(x.by||'')}</span></div><p style="margin-top:6px">${esc(x.t)}</p></div>`).join(''):'<p class="m">No comments yet. Complete trips to collect ratings.</p>'}
+ ${isD&&rp.n?`<p class="m" style="text-align:center">Rating as a passenger: ${rp.avg.toFixed(2)} (${rp.n})</p>`:''}`)}
+function photoMenu(){
+ $('#mdp').innerHTML=`<h3 style="margin-bottom:8px">Profile photo</h3><button class="btn d lft" onclick="mdClose(null);changePhoto('user')">${ic('camera',20)} Take a photo</button><button class="btn d lft" onclick="mdClose(null);changePhoto()">${ic('image',20)} Choose from gallery</button>${me.photo?`<button class="btn d lft" onclick="mdClose(null);removePhoto()">${ic('trash',20)} Remove photo</button>`:''}<button class="lnk" style="color:var(--mut)" onclick="mdClose(null)">Cancel</button>`;$('#md').hidden=false}
+async function removePhoto(){try{await db.collection('users').doc(me.uid).update({photo:firebase.firestore.FieldValue.delete(),photoS:firebase.firestore.FieldValue.delete()});delete me.photo;delete me.photoS;toast('Photo removed');pgRefresh()}catch(e){toast('Could not remove photo.')}}
+
+/* --- Account --- */
+function pgAccount(){
+ const u=auth.currentUser||{},prov=((u.providerData||[])[0]||{}).providerId==='google.com'?'Google':'Email &amp; password';
+ pgSet('Personal info',`
+ <div class="vu" style="padding-bottom:6px"><button class="avbig" onclick="photoMenu()">${avt(me.photo||me.photoS,me.name,96)}<span class="cam">${ic('camera',18)}</span></button><small class="m">Tap to change your photo</small></div>
+ <div class="fl"><label>Full name</label><div class="f">${ic('user',20)}<input id="sn" value="${esc(me.name)}" autocomplete="name"></div></div>
+ <div class="fl"><label>Phone number</label><div class="f">${ic('phone',20)}<input id="sp" type="tel" value="${esc(me.phone)}" autocomplete="tel"></div></div>
+ <div class="fl"><label>Email</label><div class="f dis">${ic('mail',20)}<input value="${esc(u.email||'')}" disabled></div></div>
+ <div class="fl"><label>Signed in with</label><div class="f dis">${ic('key',20)}<input value="${prov}" disabled></div></div>
+ <button class="btn" style="margin-top:10px" onclick="saveProf()">Save changes</button>
+ ${prov==='Google'?'':`<div class="lg" style="margin-top:18px">${row('lock','Change password','We will email you a reset link',"resetPw()")}</div>`}`)}
+async function saveProf(){
+ const d={name:$('#sn').value.trim(),phone:$('#sp').value.trim()};
+ if(!d.name||!d.phone)return toast('Name and phone number are required.');
+ try{await db.collection('users').doc(me.uid).update(d);Object.assign(me,d);toast('Saved');}catch(e){toast('Could not save. Try again.')}}
+async function resetPw(){const e=auth.currentUser&&auth.currentUser.email;if(!e)return;try{await auth.sendPasswordResetEmail(e);toast('Reset link sent to '+e)}catch(x){toast('Could not send the email.')}}
+
+/* --- Appearance / Notifications --- */
+function pgAppearance(){pgSet('Appearance',`<p class="m">Pick how ${APP.name} looks. The map changes with the theme.</p><div class="themes" id="thg">${themeGrid()}</div>`)}
+function pickTheme(id){applyTheme(id,true);const g=$('#thg');g&&(g.innerHTML=themeGrid());}
+function pgNotif(){const P=prefs();
+ pgSet('Notifications &amp; sound',`<div class="lg">
+ ${row('phoneVib','Vibration','Vibrate for new offers and trip updates',"",swt('vib',P.vib))}
+ ${row('volume','Sound alerts','Play a tone for new offers and requests',"",swt('snd',P.snd))}
+ ${row('bell','Browser notifications','Show alerts when the app is in the background',"",swt('push',P.push))}
+ ${me.role==='passenger'?row('zap','Auto-accept by default','Pre-select auto-accept when requesting',"",swt('auto',P.auto)):''}
+ </div><p class="m">Notifications work while ${APP.name} is open or in the background. Allow notifications in your browser or device settings if asked.</p>`)}
+
+/* --- Safety / Help / About --- */
+function pgSafety(){
+ pgSet('Safety center',`<div class="note dng">${ic('siren',20)}<span>In an emergency, call the emergency services first.</span></div>
+ <div class="em"><a href="tel:995">${ic('siren',22)}<b>Police</b><span>995</span></a><a href="tel:994">${ic('heart',22)}<b>Ambulance</b><span>994</span></a><a href="tel:993">${ic('alert',22)}<b>Fire</b><span>993</span></a></div>
+ <p class="m">Emergency numbers can change. If a number does not connect, contact your nearest police station.</p>
+ <div class="sec">Tips for passengers</div><div class="lg tips">
+ ${['Check the driver\'s photo, name, vehicle and number plate match the app before you get in.','Share your trip with a friend using the Share trip button during a ride.','Sit in the back seat and wear your seat belt.','Never pay more than the fare agreed in the app.','Report anything that made you feel unsafe in Help &amp; support.'].map(t=>`<div class="tp">${ic('check',16)}<span>${t}</span></div>`).join('')}</div>
+ <div class="sec">Tips for drivers</div><div class="lg tips">
+ ${['Only carry the passenger shown in the app and no more than your vehicle\'s legal limit.','Confirm the passenger\'s name and photo before starting the trip.','Keep your licence, registration and insurance valid and with you.','Do not drive tired, or after alcohol or drugs.'].map(t=>`<div class="tp">${ic('check',16)}<span>${t}</span></div>`).join('')}</div>`)}
+function pgHelp(){
+ const faq=[['How do I request a ride?','Open the app, tap "Where to &amp; for how much?", choose your destination, adjust the fare with + and − and tap Find drivers. Drivers will send offers that you can accept.'],['How do I pay?','Pay the Driver in cash at the end of the trip, in the fare shown in the app.'],['Can I cancel a ride?','Yes. Open the ride and tap Cancel. After a driver has accepted you will be asked for a reason. Please cancel only when you need to.'],['How do I become a driver?','Go to Settings &gt; Become a driver, complete the verification steps and wait for approval. Then tap Switch to driver mode.'],['Why is my driver verification pending?','We review every driver by hand. You will be able to drive as soon as your documents are approved. If anything is unclear we will ask you to resubmit.'],['How are ratings calculated?','Your rating is the average of the stars you receive from the people you ride with.'],['How do I delete my account?','Settings &gt; Privacy &amp; data &gt; Delete account.']];
+ pgSet('Help &amp; support',`<div class="lg">${faq.map(([q,a])=>`<details class="fq"><summary>${q}${ic('chevD',18)}</summary><p>${a}</p></details>`).join('')}</div>
+ <div class="sec">Contact us</div><div class="lg">
+ ${row('mail','Email support',APP.email,"location.href='mailto:"+APP.email+"?subject="+encodeURIComponent(APP.name+' support')+"'")}
+ ${row('alert','Report a safety problem','Tell us what happened',"location.href='mailto:"+APP.email+"?subject="+encodeURIComponent(APP.name+' safety report')+"&body="+encodeURIComponent('Describe what happened, the date and time, and the driver number plate:\n\n')+"'")}
+ </div>`)}
+function pgAbout(){pgSet('About',`<div class="vu"><img src="icon-192.png" style="width:84px;height:84px;border-radius:20px" alt="" onerror="this.style.display='none'"><h3>${APP.name}</h3><p class="m">Version ${APP.version}</p><p class="m">Name your fare. Ride anywhere in Zimbabwe.</p></div>
+ <div class="lg">${row('file','Terms &amp; Conditions','',"pgOpen(pgLegal,['terms'])")}${row('shield','Privacy Policy','',"pgOpen(pgLegal,['privacy'])")}${standalone()?'':row('install','Install app','',"installApp()")}</div>
+ <p class="m" style="text-align:center;margin-top:18px">© ${new Date().getFullYear()} ${APP.company}. All rights reserved.<br>Maps by Google.</p>`)}
+function pgLegal(k){const L=LEGAL[k];
+ pgSet(L.title,`<p class="m">Last updated: ${APP.updated}</p><p>${esc(lg(L.intro))}</p>${L.s.map(([h,ps])=>`<h4 class="lh">${esc(lg(h))}</h4>${ps.map(p=>`<p class="lp">${esc(lg(p))}</p>`).join('')}`).join('')}<p class="m" style="margin-top:22px">Questions? ${esc(APP.email)}</p>`)}
+function showLegal(k){PGS.length=0;pgOpen(pgLegal,[k])}
+
+/* --- Privacy & data --- */
+function pgPrivacy(){pgSet('Privacy &amp; data',`<div class="lg">
+ ${row('shield','Privacy Policy','How we use your information',"pgOpen(pgLegal,['privacy'])")}
+ ${row('file','Terms &amp; Conditions','',"pgOpen(pgLegal,['terms'])")}
+ ${row('download','Download my data','A copy of your profile and trips',"exportData()")}
+ ${row('pin','Location access','Manage in your browser or device settings',"toast('Change location permission in your browser or device settings.')")}
+ </div><div class="sec">Danger zone</div><div class="lg">${row('trash','Delete account','Permanently remove your account and documents',"delAcct()",undefined,true)}</div>`)}
+async function exportData(){
+ try{toast('Preparing your data…');const out={exported:new Date().toISOString(),profile:{...me,photo:me.photo?'[photo]':undefined,photoS:undefined},email:(auth.currentUser||{}).email};
+  const [a,b]=await Promise.all([R_.where('pax','==',me.uid).get(),R_.where('driver','==',me.uid).get()]);
+  const clean=d=>{const x=d.data();delete x.paxPhoto;delete x.driverPhoto;return {id:d.id,...x,created:x.created&&x.created.seconds?new Date(x.created.seconds*1000).toISOString():null,dLoc:undefined}};
+  out.ridesAsPassenger=a.docs.map(clean);out.ridesAsDriver=b.docs.map(clean);
+  const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'}),l=document.createElement('a');l.href=URL.createObjectURL(blob);l.download='arndrive-my-data.json';document.body.appendChild(l);l.click();l.remove();toast('Download started')}catch(e){toast('Could not export your data.')}}
+async function delAcct(){
+ $('#mdp').innerHTML=`<h3 style="margin-bottom:8px">Delete your account?</h3><p class="m">This permanently deletes your profile, photo and driver documents. Trip records may be kept in anonymised form as described in the Privacy Policy. This cannot be undone.</p><button class="btn" style="background:var(--danger);color:#fff" onclick="mdClose(null);doDelete()">Yes, delete my account</button><button class="btn d" onclick="mdClose(null)">Cancel</button>`;$('#md').hidden=false}
+async function doDelete(){
+ if(ride)return toast('Finish or cancel your current ride first.');
+ try{const uid=me.uid;const ds=await db.collection('users').doc(uid).collection('docs').get();await Promise.all(ds.docs.map(d=>d.ref.delete()));await db.collection('users').doc(uid).delete();await auth.currentUser.delete();pgClose();toast('Your account was deleted')}
+ catch(e){if(e.code==='auth/requires-recent-login'){toast('For security, sign in again and then delete your account.');pgClose();auth.signOut()}else toast('Could not delete the account. Try again.')}}
+
+/* ============ AUTH (updated: terms, Google, no role at sign-up) ============ */
+function authReset(){mode='in';$('#su').hidden=true;$('#su').style.display='none';$('#cred').hidden=false;$('#alt').hidden=false;$('#tg').hidden=false;$('#fg').hidden=false;$('#cx').hidden=true;$('#tos').hidden=true;$('#go').textContent='Sign in';$('#tg').textContent='New here? Create account';$('#atag').textContent=AUTHSUB;$('#err').textContent=''}
+function tgl(){mode=mode==='in'?'up':'in';const up=mode==='up';$('#su').hidden=!up;$('#su').style.display=up?'flex':'none';$('#tos').hidden=!up;$('#fg').hidden=up;$('#go').textContent=up?'Create account':'Sign in';$('#tg').textContent=up?'Have an account? Sign in':'New here? Create account';$('#err').textContent=''}
+function showComplete(u){mode='complete';$('#auth').hidden=false;['#menu','#top','#pin','#loc'].forEach(x=>$(x).hidden=true);sh('');
+ $('#su').hidden=false;$('#su').style.display='flex';$('#cred').hidden=true;$('#alt').hidden=true;$('#tg').hidden=true;$('#fg').hidden=true;$('#cx').hidden=false;$('#tos').hidden=false;
+ $('#go').textContent='Continue';$('#atag').textContent='Almost done. Tell us a bit about you.';$('#err').textContent='';
+ if(!$('#nm').value)$('#nm').value=u.displayName||''}
+async function go(){
+ const e=$('#em').value.trim(),p=$('#pw').value;$('#err').style.color='';$('#err').textContent='';
+ try{
+  if(mode==='in'){await auth.signInWithEmailAndPassword(e,p);return}
+  const d={name:$('#nm').value.trim(),phone:$('#ph').value.trim(),role:'passenger',dstatus:'none',created:TS(),tosAt:TS(),tosV:APP.updated};
+  if(!d.name||!d.phone)throw Error('Enter your name and phone number.');
+  if(!$('#tosc').checked)throw Error('Please accept the Terms & Conditions and Privacy Policy to continue.');
+  if(mode==='complete'){const u=auth.currentUser;sg=1;await db.collection('users').doc(u.uid).set(d);me={...d,uid:u.uid};sg=0;boot();return}
+  sg=1;const c=await auth.createUserWithEmailAndPassword(e,p);
+  await db.collection('users').doc(c.user.uid).set(d);me={...d,uid:c.user.uid};sg=0;boot();
+ }catch(x){sg=0;$('#err').textContent=AERR[x.code]||String(x.message).replace('Firebase: ','')}
+}
+
+/* ============ BOOT / MODES ============ */
+function boot(){
+ clean();authReset();$('#auth').hidden=true;$('#menu').hidden=false;
+ if(me.theme&&THEMES[me.theme]&&me.theme!==window._themeSel)applyTheme(me.theme);
+ if(me.role==='driver'&&!isVerified()){me.role='passenger';db.collection('users').doc(me.uid).update({role:'passenger'}).catch(()=>{})}
+ auto=prefs().auto;MYD=null;MYP=null;lastDone=null;
+ me.role==='driver'?driverUI():paxUI();
+ ratingOf(me.uid,'pax').then(r=>{MYP=r}).catch(()=>{});
+ if(isVerified())ratingOf(me.uid,'driver').then(r=>{MYD=r}).catch(()=>{});
+}
+async function switchMode(){
+ if(ride&&ride.status!=='done')return toast('Finish your current trip first.');
+ $('#dr').hidden=true;
+ if(me.role==='driver')return setRole('passenger');
+ if(isVerified())return setRole('driver');
+ PGS.length=0;pgOpen(pgDriver)}
+async function setRole(r){
+ try{await db.collection('users').doc(me.uid).update({role:r});me.role=r;pgClose();clrMap();$('#pin').hidden=true;boot();toast(r==='driver'?'Driver mode on':'Passenger mode on')}catch(e){toast('Could not switch mode. Try again.')}}
+
+/* ============ DRAWER (side menu) ============ */
+const dli=(i,t,on,act)=>`<div class="dli ${act?'on':''}" onclick="${on}">${ic(i,24)}<span>${t}</span></div>`;
+function openMenu(){
+ const isD=me.role==='driver',rr=isD?MYD:MYP,st=drvStatus();
+ $('#drp').innerHTML=`<div class="dh" onclick="pgOpen(pgProfile)">${avt(me.photo||me.photoS,me.name,58)}<div class="lm"><b>${esc(me.name)} ${isD&&isVerified()?vbadge():''}</b><div class="rr">${stars5(rr?rr.avg:0,13)}<span>${rateTxt(rr)}</span></div></div>${ic('chevR',18,'ch')}</div>
+ <div class="dl">
+ ${dli('car',isD?'Drive':'Ride',"$('#dr').hidden=true",true)}
+ ${dli('clock','Ride history',"PGS.length=0;pgOpen(pgHist)")}
+ ${!isD?dli('globe','City to City',"goC2C()"):''}
+ ${dli('bell','Notifications',"PGS.length=0;pgOpen(pgNotif)")}
+ ${dli('shield','Safety',"PGS.length=0;pgOpen(pgSafety)")}
+ ${dli('gear','Settings',"showSettings()")}
+ ${dli('info','Help',"PGS.length=0;pgOpen(pgHelp)")}
+ ${dli('headset','Support',"location.href='mailto:'+APP.email")}
+ ${standalone()?'':dli('install','Install app',"installApp()")}
+ </div>
+ <div class="df"><button class="btn" onclick="switchMode()">${ic('swap',20)} ${isD?'Passenger mode':st==='verified'?'Driver mode':st==='pending'?'Verification pending':'Become a driver'}</button>
+ <div class="fl2"><a onclick="PGS.length=0;pgOpen(pgLegal,['terms'])">Terms</a> · <a onclick="PGS.length=0;pgOpen(pgLegal,['privacy'])">Privacy</a></div></div>`;
+ $('#dr').hidden=false}
+function goC2C(){$('#dr').hidden=true;rtype='c2c';if(!ride){if(stage==='idle')idleView();else if(stage==='route'&&drop)doRoute()}}
+
+/* ============ HISTORY ============ */
+async function pgHist(){
+ pgSet('Ride history','<p class="m">Loading…</p>');
+ try{const isD=me.role==='driver';const s=await R_.where(isD?'driver':'pax','==',me.uid).get();
+  const a=s.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.status==='done'||r.status==='cancelled').sort((x,y)=>((y.created&&y.created.seconds)||0)-((x.created&&x.created.seconds)||0)).slice(0,60);
+  const done=a.filter(r=>r.status==='done'),tot=done.reduce((n,r)=>n+(+r.price||0),0);
+  pgSet('Ride history',`<div class="stat"><div><b>${done.length}</b><span>Completed</span></div><div><b>${money(tot)}</b><span>${isD?'Earned':'Spent'}</span></div><div><b>${a.length-done.length}</b><span>Cancelled</span></div></div>`+
+  (a.length?a.map(r=>`<div class="card hi"><div class="of">${avt(isD?r.paxPhoto:r.driverPhoto,isD?r.paxName:r.driverName,44)}<div class="t"><b>${esc((r.drop&&r.drop.name)||'')}</b><span class="m" style="margin:0">${esc((r.pickup&&r.pickup.name)||'')}</span></div><span class="pr">${money(r.price)}</span></div>
+  <div class="row" style="margin:10px 0 0"><span class="mm">${r.created?new Date(r.created.seconds*1000).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>${r.status==='done'?'<span class="tg">Completed</span>':'<span class="tg x">Cancelled</span>'}${(isD?r.paxRating:r.rating)>0?`<span class="mm rr">${stars5(isD?r.paxRating:r.rating,12)}</span>`:''}</div></div>`).join(''):`<div class="empty">${ic('clock',34)}<p>No trips yet</p><small>Your completed and cancelled trips will show here.</small></div>`))
+ }catch(e){pgSet('Ride history','<p class="m">Could not load history.</p>')}}
+
+/* ============ DRIVER ACCOUNT + VERIFICATION ============ */
+const VSTEPS=['Profile photo','Driver\'s licence','Your vehicle','Vehicle documents','Selfie check','Review &amp; submit'];
+let VS=null;
+const dstat=(s)=>({verified:['ok','Verified'],pending:['wn','Under review'],rejected:['bd','Needs attention'],none:['','Not started']})[s];
+function pgDriver(){
+ const st=drvStatus(),[cls,lab]=dstat(st);
+ if(st==='verified'){
+  pgSet('Driver account',`<div class="note ok">${ic('shieldcheck',22)}<span><b>You are a verified driver.</b><br>Switch to Driver mode from the menu to start accepting rides.</span></div>
+  ${me.car?`<div class="card"><div class="of">${carImg('ride',92)}<div class="t"><b>${esc(me.car)}</b><span class="m" style="margin:0"><span class="plate">${esc(me.plate||'')}</span></span></div></div></div>`:''}
+  <button class="btn" onclick="switchMode()">${ic('swap',20)} ${me.role==='driver'?'Switch to passenger mode':'Switch to driver mode'}</button>
+  <div class="lg" style="margin-top:16px">${row('refresh','Update vehicle or documents','Changing these sends you for review again',"vStart(true)")}</div>`);return}
+ if(st==='pending'){
+  pgSet('Driver verification',`<div class="note wn">${ic('clock',22)}<span><b>Your documents are under review.</b><br>We check every driver by hand. This usually takes up to 24 hours. You will be able to drive as soon as you are approved.</span></div>
+  <div class="vsteps">${VSTEPS.map(t=>`<div class="vs done">${ic('check',16)}<span>${t}</span></div>`).join('')}</div>
+  <p class="m">Opened the app after being approved? Pull down or reopen it, then tap Switch to driver mode.</p>
+  <button class="btn d" onclick="reloadMe()">${ic('refresh',18)} Check status</button>`);return}
+ pgSet('Become a driver',`${st==='rejected'?`<div class="note bd">${ic('alert',22)}<span><b>We could not approve your documents.</b><br>${esc(me.dnote||'Please check your documents are clear and valid, then resubmit.')}</span></div>`:`<div class="vu"><div class="hero">${carImg('ride',190)}</div><h3>Drive with ${APP.name}</h3><p class="m">Set your own hours and earn on every trip. Verification keeps passengers and drivers safe.</p></div>`}
+ <div class="sec">What you will need</div><div class="vsteps">${[['user','A clear profile photo of your face'],['idcard','Your valid driver\'s licence (number, expiry and photo)'],['car','Vehicle details and a photo of the vehicle'],['file','Vehicle registration book (and insurance if you have it)'],['camera','A quick selfie to confirm it is you']].map(([i,t])=>`<div class="vs">${ic(i,18)}<span>${t}</span></div>`).join('')}</div>
+ <button class="btn" onclick="vStart()">${st==='rejected'?'Resubmit documents':'Start verification'}</button><p class="m" style="text-align:center">Takes about 5 minutes. Your documents are only seen by our review team. <a class="al" onclick="pgOpen(pgLegal,['privacy'])">Privacy Policy</a></p>`)}
+async function reloadMe(){try{const s=await db.collection('users').doc(me.uid).get();if(s.exists){me={...s.data(),uid:me.uid};toast(isVerified()?'You are approved!':'Still under review');pgRefresh()}}catch(e){toast('Could not check. Try again.')}}
+function vStart(){
+ VS={step:0,d:{make:'',model:'',colour:'',year:'',plate:me.plate||'',licNo:'',licExp:'',agree:false,consent:false},img:{},photoBig:null,photoSm:null};
+ PGS.length=0;pgOpen(pgVerify)}
+const vset=(k,v)=>{VS.d[k]=v};
+async function vPick(key,cap){
+ const f=await pickFile(cap);if(!f)return;
+ try{if(key==='profile'){VS.photoBig=await squareJpeg(f,320,.8);VS.photoSm=await squareJpeg(f,96,.7)}else VS.img[key]=await fitJpeg(f,1000,.72);pgRender()}catch(e){toast('Could not use that photo. Try another one.')}}
+const upl=(key,label,cap,opt)=>{const src=key==='profile'?(VS.photoBig||me.photo):VS.img[key];return`<div class="fl"><label>${label}${opt?' <i>(optional)</i>':''}</label><div class="upl ${src?'has':''}" onclick="vPick('${key}','${cap||''}')">${src?`<img src="${src}" alt=""><span class="rt">${ic('refresh',14)} Retake</span>`:`${ic(cap==='user'?'camera':'upload',28)}<span>${cap==='user'?'Tap to take a photo':'Tap to take or upload a photo'}</span>`}</div></div>`};
+const vfield=(k,l,ic_,ph,type,extra)=>`<div class="fl"><label>${l}</label><div class="f">${ic(ic_,20)}<input value="${esc(VS.d[k])}" placeholder="${ph||''}" ${type?`type="${type}"`:''} ${extra||''} oninput="vset('${k}',this.value)"></div></div>`;
+function pgVerify(){
+ const s=VS.step,pct=Math.round((s+1)/VSTEPS.length*100),d=VS.d;let body='';
+ if(s===0)body=`<p class="m">Passengers see this photo when you send an offer. Use a clear, front-facing photo of your face with good lighting.</p>${upl('profile','Profile photo','user')}`;
+ if(s===1)body=`<p class="m">Enter the details exactly as they appear on your licence.</p>${vfield('licNo',"Licence number",'idcard','e.g. 12345678AB')}${vfield('licExp','Expiry date','calendar','','date')}${upl('licFront','Licence photo (front)','environment')}${upl('licBack','Licence photo (back)','environment',true)}`;
+ if(s===2)body=`${vfield('make','Make','car','e.g. Honda')}${vfield('model','Model','car','e.g. Fit')}${vfield('colour','Colour','palette','e.g. White')}${vfield('year','Year','calendar','e.g. 2016','number','inputmode="numeric" min="1990" max="2100"')}${vfield('plate','Number plate','idcard','e.g. AEH 1234')}${upl('vehicle','Photo of the vehicle (number plate visible)','environment')}`;
+ if(s===3)body=`<p class="m">Upload clear, readable photos. All four corners of the document should be visible.</p>${upl('registration','Vehicle registration book','environment')}${upl('insurance','Insurance certificate / licence disc','environment',true)}`;
+ if(s===4)body=`<p class="m">Take a live selfie now so we can match your face to your licence and profile photo.</p>${upl('selfie','Selfie','user')}`;
+ if(s===5)body=`<div class="card"><div class="of">${avt(VS.photoBig||me.photo,me.name,56)}<div class="t"><b>${esc(me.name)}</b><span class="m" style="margin:0">${esc(me.phone)}</span></div></div></div>
+ <div class="card sm"><div class="kv"><span>Vehicle</span><b>${esc((d.colour+' '+d.make+' '+d.model).trim())} ${esc(d.year)}</b></div><div class="kv"><span>Number plate</span><b>${esc(d.plate.toUpperCase())}</b></div><div class="kv"><span>Licence no.</span><b>${esc(d.licNo)}</b></div><div class="kv"><span>Licence expiry</span><b>${esc(d.licExp)}</b></div><div class="kv"><span>Documents</span><b>${Object.keys(VS.img).length} uploaded</b></div></div>
+ <label class="chk"><input type="checkbox" ${d.agree?'checked':''} onchange="vset('agree',this.checked)"><span>I confirm the information and documents I submitted are true and belong to me.</span></label>
+ <label class="chk"><input type="checkbox" ${d.consent?'checked':''} onchange="vset('consent',this.checked)"><span>I agree to the <a class="al" onclick="vLegal('terms')">Terms &amp; Conditions</a> and <a class="al" onclick="vLegal('privacy')">Privacy Policy</a>, and consent to ${APP.name} checking my documents.</span></label>`;
+ pgSet(VSTEPS[s],`<div class="prog"><i style="width:${pct}%"></i></div><p class="m" style="margin-top:6px">Step ${s+1} of ${VSTEPS.length}</p>${body}
+ <div class="vnav">${s>0?`<button class="btn d" onclick="vGo(-1)">Back</button>`:''}<button class="btn" onclick="vGo(1)">${s===VSTEPS.length-1?'Submit for review':'Continue'}</button></div>`)
+}
+function vLegal(k){const keep=VS;PGS.push([pgLegal,[k]]);pgRender()}
+function vValid(s){
+ const d=VS.d,today=new Date().toISOString().slice(0,10),y=new Date().getFullYear()+1;
+ if(s===0&&!(VS.photoBig||me.photo))return'Please add a profile photo.';
+ if(s===1){if(d.licNo.trim().length<5)return'Enter your licence number.';if(!d.licExp||d.licExp<=today)return'Your licence must have a future expiry date.';if(!VS.img.licFront)return'Add a photo of the front of your licence.'}
+ if(s===2){if(!d.make.trim()||!d.model.trim()||!d.colour.trim())return'Enter the make, model and colour.';if(!(+d.year>=1990&&+d.year<=y))return'Enter a valid year.';if(d.plate.trim().length<3)return'Enter the number plate.';if(!VS.img.vehicle)return'Add a photo of your vehicle.'}
+ if(s===3&&!VS.img.registration)return'Add a photo of the vehicle registration book.';
+ if(s===4&&!VS.img.selfie)return'Take a selfie to continue.';
+ if(s===5&&!(d.agree&&d.consent))return'Please tick both boxes to submit.';
+ return''}
+function vGo(n){
+ if(n>0){const e=vValid(VS.step);if(e)return toast(e);if(VS.step===VSTEPS.length-1)return vSubmit();VS.step++}
+ else{if(VS.step>0)VS.step--}
+ pgRender()}
+async function vSubmit(){
+ const d=VS.d;pgSet('Submitting…','<p class="m">Uploading your documents. Please wait…</p>');
+ try{const b=db.batch(),u=db.collection('users').doc(me.uid);
+  const upd={dstatus:'pending',dsubmitted:TS(),dnote:'',car:(d.colour+' '+d.make+' '+d.model).trim().replace(/\s+/g,' '),plate:d.plate.trim().toUpperCase()};
+  if(VS.photoBig){upd.photo=VS.photoBig;upd.photoS=VS.photoSm}
+  b.update(u,upd);
+  b.set(u.collection('docs').doc('info'),{licNo:d.licNo.trim(),licExp:d.licExp,make:d.make.trim(),model:d.model.trim(),colour:d.colour.trim(),year:+d.year,plate:upd.plate,ts:TS()});
+  for(const k in VS.img)b.set(u.collection('docs').doc(k),{img:VS.img[k],ts:TS()});
+  await b.commit();
+  me={...me,...upd,dsubmitted:null};if(me.role==='driver'){me.role='passenger'}
+  VS=null;PGS.length=0;pgOpen(pgDriver);toast('Submitted for review')
+ }catch(e){toast('Upload failed. Check your connection and try again.');VS.step=5;pgRender()}}
+
+/* ============ ADMIN: review drivers ============ */
+async function pgAdmin(){
+ pgSet('Driver reviews','<p class="m">Loading…</p>');
+ try{const s=await db.collection('users').where('dstatus','==','pending').get();
+  pgSet('Driver reviews',s.empty?`<div class="empty">${ic('shieldcheck',34)}<p>All caught up</p><small>No drivers are waiting for review.</small></div>`:s.docs.map(d=>{const u=d.data();return`<div class="card"><div class="of">${avt(u.photoS||u.photo,u.name,48)}<div class="t"><b>${esc(u.name)}</b><span class="m" style="margin:0">${esc(u.phone)} · ${esc(u.car||'')} · ${esc(u.plate||'')}</span></div></div><button class="btn s" style="width:100%;margin-top:10px" onclick="adminReview('${d.id}')">Review documents</button></div>`}).join(''))
+ }catch(e){pgSet('Driver reviews','<p class="m">Could not load. Check that your Firestore rules allow admin access.</p>')}}
+async function adminReview(uid){
+ $('#mdp').innerHTML='<p class="m">Loading documents…</p>';$('#md').hidden=false;
+ try{const [us,ds]=await Promise.all([db.collection('users').doc(uid).get(),db.collection('users').doc(uid).collection('docs').get()]);const u=us.data(),docs={};ds.forEach(x=>docs[x.id]=x.data());const i=docs.info||{};
+  const names={licFront:'Licence (front)',licBack:'Licence (back)',vehicle:'Vehicle',registration:'Registration',insurance:'Insurance / disc',selfie:'Selfie'};
+  $('#mdp').innerHTML=`<h3>${esc(u.name)}</h3><p class="m">${esc(u.phone)}<br>Licence: <b>${esc(i.licNo||'')}</b> (expires ${esc(i.licExp||'')})<br>Vehicle: <b>${esc((i.colour||'')+' '+(i.make||'')+' '+(i.model||'')+' '+(i.year||''))}</b> · ${esc(i.plate||'')}</p>
+  <div class="adm">${u.photo?`<figure><img src="${u.photo}"><figcaption>Profile photo</figcaption></figure>`:''}${Object.keys(names).filter(k=>docs[k]).map(k=>`<figure><img src="${docs[k].img}"><figcaption>${names[k]}</figcaption></figure>`).join('')}</div>
+  <button class="btn" onclick="adminDecide('${uid}',true)">${ic('check',20)} Approve driver</button>
+  <input class="cin" id="rjn" placeholder="Reason if rejecting (shown to the driver)" style="margin-top:10px"><button class="btn d" style="margin-top:8px" onclick="adminDecide('${uid}',false)">Reject</button><button class="lnk" style="color:var(--mut)" onclick="mdClose(null)">Close</button>`}
+ catch(e){$('#mdp').innerHTML='<p class="m">Could not load documents.</p><button class="btn d" onclick="mdClose(null)">Close</button>'}}
+async function adminDecide(uid,ok){
+ const note=($('#rjn')&&$('#rjn').value.trim())||'';if(!ok&&!note)return toast('Add a short reason for the driver.');
+ try{await db.collection('users').doc(uid).update(ok?{dstatus:'verified',dnote:'',dreviewed:TS()}:{dstatus:'rejected',dnote:note,dreviewed:TS()});mdClose(null);toast(ok?'Driver approved':'Driver rejected');pgRefresh()}catch(e){toast('Could not save. Check your admin permissions.')}}
+
+/* ============ PASSENGER ============ */
+function paxUI(){
+ locate(true);let lastN=0;
+ U.push(R_.where('pax','==',me.uid).where('active','==',true).onSnapshot(s=>{
+  const old=ride;ride=s.empty?null:{id:s.docs[0].id,...s.docs[0].data()};
+  if(old&&ride){
+   if(old.status!==ride.status){const T={accepted:'Your driver accepted the ride',arrived:'Your driver has arrived',ongoing:'Trip started',done:"You've arrived"};T[ride.status]&&alertUser(T[ride.status])}
+   if(old.driver&&!ride.driver&&ride.status==='open')alertUser('Your driver cancelled. Finding you another driver…')}
+  if(!ride&&hadRide){drop=null;rt=null;stage='idle';DECL={};fitted='';RT=0}
+  hadRide=!!ride;paxView()}));
+}
+let RT=0;
+function recentList(){return recents().slice(0,4).map((x,i)=>`<div class="rec" onclick="useRecent(${i})">${IC_CLOCK}<div>${esc(x.name.split(',')[0])}<small>${esc(x.name.split(',').slice(1).join(',').trim())}</small></div></div>`).join('')}
+function idleView(){
+ clrMap();$('#top').hidden=true;$('#pin').hidden=false;$('#pl').textContent='Pickup point';$('#pic').innerHTML=sq(PERSON);$('#loc').hidden=false;setPin();
+ sh(`<div class="tabs"><button class="tab ${rtype==='ride'?'on':''}" onclick="setType('ride')">${carImg('ride')}<span class="tl">Ride <span class="sub">${ic('user',14)} 4</span></span></button><button class="tab ${rtype==='c2c'?'on':''}" onclick="setType('c2c')"><span class="lug">${ic('luggage',20)}</span>${carImg('c2c')}<span class="tl">City to city</span></button></div>
+ <button class="where" onclick="openSearch('ds')">${ic('search',24)}Where to &amp; for how much?</button>${recentList()}`);
+ requestAnimationFrame(()=>{$('#loc').style.bottom=($('#sheet').offsetHeight+14)+'px'});
+}
+function routeView(){
+ clrMap();$('#pin').hidden=true;$('#loc').hidden=true;
+ put('p',{lat:here.lat,lng:here.lng},pickI());put('d',{lat:drop.lat,lng:drop.lng},dropI());
+ if(rt)drawPoly(rt.path);fit([here,drop]);
+ $('#top').hidden=false;$('#top').innerHTML=`<div class="tr" onclick="openSearch('pk')">${IC_PERSON}<b>${esc(here.name||'Pickup')}</b></div><div class="tr" onclick="openSearch('ds')">${IC_FLAG}<b>${esc(drop.name)} <small>~${rt?rt.mins:'?'} min</small></b></div>`;
+ const t=money(price).replace('.00','');
+ sh(`<button class="bk" onclick="backIdle()">${ic('chevL',24)}</button>
+ <div class="rc">${carImg(rtype,118)}<div><b>${rtype==='ride'?'Ride':'City to city'}</b><br><span class="g">${ic('user',14)} 4 • ${rt.mins} min • ${rt.km.toFixed(1)} km</span><br><span class="g">Affordable fares</span></div></div>
+ <div class="pcw"><div class="pc"><button onclick="adj(-.5)">${ic('minus',24)}</button><div class="amt" id="amt">${t}</div><button onclick="adj(.5)">${ic('plus',24)}</button></div>
+ <div class="auto">${ic('nav',22)}<span id="aut">Auto-accept offer of ${t}</span><button class="sw ${auto?'on':''}" id="sw" onclick="tAuto()"></button></div></div>
+ <div class="fr"><div class="cash">${ic('wallet',16)}</div><button class="btn" onclick="req()">Find drivers</button><button class="opt" onclick="opts()">${ic('sliders',26)}</button></div>`);
+}
+async function req(){
+ if(!(price>0)||!drop||!here)return;
+ await fx(R_.add({pax:me.uid,paxName:me.name,paxPhone:me.phone,paxPhoto:me.photoS||null,paxRating:MYP&&MYP.n?+MYP.avg.toFixed(2):0,paxRN:MYP?MYP.n:0,pickup:{lat:here.lat,lng:here.lng,name:here.name||'Pickup'},drop,km:+rt.km.toFixed(1),mins:rt.mins,type:rtype,price,auto,note,status:'open',active:true,created:TS()}));
+}
+const _acc0=0;
+function accept(id){const o=O[id];if(!o)return;fx(R_.doc(ride.id).update({status:'accepted',driver:o.driver,driverName:o.name,driverPhone:o.phone,driverCar:o.car,driverPlate:o.plate,driverPhoto:o.photo||null,driverRating:o.rating||0,driverRN:o.rcount||0,driverVerified:!!o.verified,price:o.price}))}
+function paxView(){
+ offU&&offU();offU=null;const r=ride;
+ if(!r){
+  $('#loc').style.bottom='';
+  if(stage==='route'&&drop&&here)return routeView();
+  if(stage==='pickdrop')return pickView();
+  return idleView()}
+ stage='route';$('#pin').hidden=true;$('#top').hidden=true;$('#loc').hidden=true;
+ clrMap(['p','d','c']);
+ put('p',{lat:r.pickup.lat,lng:r.pickup.lng},pickI());put('d',{lat:r.drop.lat,lng:r.drop.lng},dropI());
+ if(r.status==='open'){
+  if(fitted!=='o'+r.id){fitted='o'+r.id;fit([r.pickup,r.drop])}
+  sh(`<div class="row"><h3><span class="pulse"></span>Finding drivers…</h3><span class="pr">${money(r.price)}</span></div>
+  <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)} · ${r.km} km${r.auto?` · <b style="color:var(--accX)">Auto-accept on</b>`:''}</p>
+  <div class="row"><button class="btn d s" onclick="bump(-.5)">−$0.50</button><button class="btn s" onclick="bump(.5)">Raise fare +$0.50</button></div>
+  <div id="offers"><p class="m">Waiting for driver offers…</p></div><button class="lnk" onclick="cancel()">Cancel request</button>`);
+  let seen=0;
+  offU=R_.doc(r.id).collection('offers').onSnapshot(s=>{
+   O={};s.forEach(d=>O[d.id]=d.data());
+   if(ride&&ride.auto){const best=Object.entries(O).filter(([i,o])=>+o.price<=+ride.price&&!DECL[i]).sort((a,b)=>a[1].price-b[1].price)[0];if(best&&ride.status==='open'){offU&&offU();offU=null;return accept(best[0])}}
+   const a=Object.entries(O).filter(([id])=>!DECL[id]).sort((x,y)=>x[1].price-y[1].price),b=$('#offers');if(!b)return;
+   if(a.length>seen)alertUser('New offer from '+a[0][1].name);seen=a.length;
+   b.innerHTML=a.length?a.map(([id,o])=>`<div class="card"><div class="of"><span onclick="viewUser('${o.driver}','driver')">${avt(o.photo,o.name,52)}</span><div class="t"><b>${esc(o.name)} ${o.verified?vbadge():''}</b><span class="rr">${stars5(o.rating||0,12)}<span class="mm">${o.rcount?(+o.rating).toFixed(2)+' ('+o.rcount+')':'New'}</span></span><span class="m" style="margin:2px 0 0">${esc(o.car)} · <span class="plate">${esc(o.plate)}</span>${o.eta?` · ${o.eta} min away`:''}</span></div><span class="pr">${money(o.price)}</span></div>
+   <div class="row" style="margin-bottom:0"><button class="btn d s" style="flex:1" onclick="decl('${id}')">Decline</button><button class="btn s" style="flex:2" onclick="accept('${id}')">Accept</button></div></div>`).join(''):'<p class="m">Waiting for driver offers…</p>'});
+  return}
+ if(r.status==='done'){clrMap();
+  return sh(`<div class="vu" style="padding:0"><div class="okc">${ic('check',30)}</div><h3>You've arrived</h3><p class="m" style="text-align:center">Pay ${esc(r.driverName)} ${money(r.price)} in cash.</p>${avt(r.driverPhoto,r.driverName,64)}<p style="margin:6px 0 0"><b>How was your ride?</b></p>
+  <div class="stars" id="stars">${[1,2,3,4,5].map(n=>`<button class="${RT>=n?'on':''}" onclick="setStar(${n})">${icf('star',38)}</button>`).join('')}</div>
+  <textarea id="rnote" class="cin ta" maxlength="200" placeholder="Add a comment (optional)"></textarea>
+  <button class="btn" style="margin-top:10px" onclick="rateSubmit()">Submit</button><button class="lnk" style="color:var(--mut)" onclick="rateSkip()">Skip</button></div>`)}
+ const T={accepted:'Your driver is on the way',arrived:'Your driver has arrived',ongoing:'Enjoy your trip'};
+ let sub='';
+ if(r.dLoc){const dl=r.dLoc,tgt=r.status==='ongoing'?r.drop:r.pickup,k=hv(dl,tgt);sub=r.status==='ongoing'?`${k.toFixed(1)} km to destination`:r.status==='arrived'?'':`${k.toFixed(1)} km away · about ${eta(k)} min`;
+  put('c',{lat:dl.lat,lng:dl.lng},carI(r.dHead));
+  if(EMB&&Date.now()-embT>15000){embT=Date.now();fit([dl,tgt])}
+  if(fitted!==r.status+r.id){fitted=r.status+r.id;fit([dl,tgt])}}
+ sh(`<div class="row"><h3>${T[r.status]||''}</h3><span class="pr">${money(r.price)}</span></div>${sub?`<p class="m">${sub}</p>`:''}
+ <div class="card"><div class="of"><span onclick="viewUser('${r.driver}','driver')">${avt(r.driverPhoto,r.driverName,56)}</span><div class="t"><b>${esc(r.driverName)} ${r.driverVerified?vbadge():''}</b><span class="rr">${stars5(r.driverRating||0,12)}<span class="mm">${r.driverRN?(+r.driverRating).toFixed(2)+' ('+r.driverRN+')':'New'}</span></span><span class="m" style="margin:2px 0 0">${esc(r.driverCar)}</span></div><span class="plate big">${esc(r.driverPlate)}</span></div></div>
+ <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)}</p>${r.note?`<p class="m">${ic('note',14)} ${esc(r.note)}</p>`:''}
+ <div class="row"><a class="btn d" href="tel:${esc(r.driverPhone)}">${ic('phone',18)} Call</a><button class="btn d" onclick="shareTrip()">${ic('share',18)} Share trip</button></div>${r.status!=='ongoing'?'<button class="lnk" onclick="cancel()">Cancel ride</button>':''}`);
+}
+function setStar(n){RT=n;document.querySelectorAll('#stars button').forEach((b,i)=>b.classList.toggle('on',i<n))}
+const rateSubmit=()=>{const u={rating:RT,active:false};const t=($('#rnote')||{}).value;if(t&&t.trim())u.ratingNote=t.trim();RT=0;fx(R_.doc(ride.id).update(u))};
+const rateSkip=()=>{RT=0;fx(R_.doc(ride.id).update({rating:0,active:false}))};
+async function shareTrip(){
+ const r=ride;if(!r)return;const l=r.dLoc||here,link=l?`https://www.google.com/maps?q=${l.lat},${l.lng}`:'';
+ const txt=`I'm on a ${APP.name} trip.\nDriver: ${r.driverName}\nCar: ${r.driverCar} (${r.driverPlate})\nFrom: ${r.pickup.name}\nTo: ${r.drop.name}${link?'\nDriver location now: '+link:''}`;
+ try{if(navigator.share)await navigator.share({title:APP.name+' trip',text:txt});else{await navigator.clipboard.writeText(txt);toast('Trip details copied. Paste them to a friend.')}}catch(e){}}
+
+/* ============ DRIVER ============ */
+let lastDone=null;const DSEEN={};
+function driverUI(){
+ let t=0,first=1;$('#loc').hidden=false;$('#loc').style.bottom='';
+ W=navigator.geolocation.watchPosition(p=>{
+  const ll={lat:p.coords.latitude,lng:p.coords.longitude};let h=p.coords.heading;
+  if(h==null||isNaN(h)){if(prevPos&&hv(prevPos,ll)>.005)h=brg(prevPos,ll);else h=lastHead}
+  lastHead=h;prevPos=ll;here=ll;if(first){first=0;map.setCenter(ll);map.setZoom(15)}
+  put('me',ll,carI(h));
+  if(ride&&ride.status!=='done'&&Date.now()-t>4000){t=Date.now();fx(R_.doc(ride.id).update({dLoc:ll,dHead:Math.round(h)}))}},
+  ()=>toast('Turn on location to drive with '+APP.name+'.'),{enableHighAccuracy:true});
+ U.push(R_.where('driver','==',me.uid).where('active','==',true).onSnapshot(s=>{
+  const old=ride;ride=s.empty?null:{id:s.docs[0].id,...s.docs[0].data()};
+  if(old&&!ride){if(old.status==='done'){if(!DSEEN[old.id])lastDone=old}else alertUser('The passenger cancelled the ride.')}
+  if(!old&&ride&&ride.status!=='done')alertUser('Passenger accepted your offer!');
+  drvView()}));
+ U.push(R_.where('driver','==',me.uid).where('status','==','done').onSnapshot(s=>{HIST=s.docs.map(d=>d.data());if(!ride&&online)drawReqs();else if(!ride&&!lastDone)drvIdle()}));
+}
+function drvView(){
+ openU&&openU();openU=null;$('#top').hidden=true;
+ clrMap(['me']);
+ if(ride&&ride.status==='done'&&!DSEEN[ride.id])return drvDone(ride);
+ if(!ride&&lastDone&&!DSEEN[lastDone.id])return drvDone(lastDone);
+ if(!ride||ride.status==='done')return drvIdle();
+ const r=ride,toP=r.status==='accepted'||r.status==='arrived',tgt=toP?r.pickup:r.drop;
+ put('p',{lat:r.pickup.lat,lng:r.pickup.lng},pickI());put('d',{lat:r.drop.lat,lng:r.drop.lng},dropI());
+ if(fitted!==r.status+r.id){fitted=r.status+r.id;fit(here?[here,tgt]:[tgt]);route(toP&&here?here:r.pickup,tgt).then(x=>{if(ride&&ride.id===r.id&&x.path.length>2)drawPoly(x.path)})}
+ const nx={accepted:['I have arrived','arrived'],arrived:['Start trip','ongoing'],ongoing:['Complete trip','done']}[r.status];
+ sh(`<div class="row"><h3>${toP?'Pick up '+esc(r.paxName):'Trip in progress'}</h3><span class="pr">${money(r.price)}</span></div>
+ <div class="card"><div class="of"><span onclick="viewUser('${r.pax}','pax')">${avt(r.paxPhoto,r.paxName,52)}</span><div class="t"><b>${esc(r.paxName)}</b><span class="rr">${stars5(r.paxRating||0,12)}<span class="mm">${r.paxRN?(+r.paxRating).toFixed(2)+' ('+r.paxRN+')':'New'}</span></span></div></div></div>
+ <p class="m">${esc(r.pickup.name)} → ${esc(r.drop.name)} · ${r.km} km</p>${r.note?`<p class="m">${ic('note',14)} ${esc(r.note)}</p>`:''}
+ <div class="row"><a class="btn d" href="tel:${esc(r.paxPhone)}">${ic('phone',18)} Call</a><a class="btn d" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${tgt.lat},${tgt.lng}&travelmode=driving">${ic('nav',18)} Navigate</a></div>
+ <button class="btn" onclick="step('${nx[1]}')">${nx[0]}</button>${toP?'<button class="lnk" onclick="dcancel()">Cancel pickup</button>':''}`);
+}
+function drvDone(r){
+ clrMap(['me']);
+ sh(`<div class="vu" style="padding:0"><div class="okc">${ic('check',30)}</div><h3>Trip completed</h3><p class="m" style="text-align:center">Collect <b>${money(r.price)}</b> in cash from ${esc(r.paxName)}.</p>${avt(r.paxPhoto,r.paxName,64)}<p style="margin:6px 0 0"><b>Rate your passenger</b></p>
+ <div class="stars" id="stars">${[1,2,3,4,5].map(n=>`<button class="${RT>=n?'on':''}" onclick="setStar(${n})">${icf('star',38)}</button>`).join('')}</div>
+ <textarea id="rnote" class="cin ta" maxlength="200" placeholder="Add a comment (optional)"></textarea>
+ <button class="btn" style="margin-top:10px" onclick="drvRate(true)">Submit</button><button class="lnk" style="color:var(--mut)" onclick="drvRate(false)">Skip</button></div>`)}
+async function drvRate(go_){
+ const r=ride&&ride.status==='done'?ride:lastDone;if(!r)return;const u={};
+ if(go_&&RT>0){u.paxRating=RT;const t=($('#rnote')||{}).value;if(t&&t.trim())u.paxNote=t.trim()}
+ RT=0;DSEEN[r.id]=1;lastDone=null;
+ if(Object.keys(u).length)await fx(R_.doc(r.id).update(u));
+ drvIdle();ratingOf(me.uid,'driver').then(x=>{MYD=x}).catch(()=>{})}
+function drvIdle(){
+ openU&&openU();openU=null;$('#top').hidden=true;$('#pin').hidden=true;clrMap(['me']);if(here)put('me',here,carI(lastHead));
+ const t0=new Date();t0.setHours(0,0,0,0);const td=HIST.filter(h=>h.created&&h.created.seconds*1000>=t0);
+ sh(`<div class="row dhd"><div class="of">${avt(me.photoS||me.photo,me.name,46)}<div class="t"><b>${online?'You are online':'You are offline'}</b><span class="rr">${stars5(MYD?MYD.avg:0,12)}<span class="mm">${MYD&&MYD.n?MYD.avg.toFixed(2)+' ('+MYD.n+')':'New'}</span></span></div></div><button class="btn s ${online?'d':''}" onclick="tog()">${online?'Go offline':'Go online'}</button></div>
+ <div class="row" style="gap:8px"><div class="card kp"><div class="m" style="margin:0">Today</div><b class="pr">${money(td.reduce((a,h)=>a+(+h.price||0),0))}</b></div><div class="card kp"><div class="m" style="margin:0">Trips</div><b class="pr">${td.length}</b></div></div>
+ <div id="reqs">${online?'<p class="m">Looking for ride requests…</p>':'<p class="m">Go online to see passengers near you.</p>'}</div>`);
+ if(!online)return;
+ let seen=-1;
+ openU=R_.where('status','==','open').onSnapshot(s=>{
+  RQ=s.docs.map(d=>({id:d.id,...d.data()})).map(r=>({...r,d:here?hv(here,r.pickup):0})).sort((a,b)=>a.d-b.d);
+  if(seen>=0&&RQ.length>seen)alertUser('New ride request nearby');seen=RQ.length;drawReqs()});
+}
+function drawReqs(){
+ const box=$('#reqs');if(!box||(ride&&ride.status!=='done')||!online)return;if(document.activeElement&&box.contains(document.activeElement))return;
+ for(const k in M)if(k[0]==='r'){M[k].setMap(null);delete M[k]}
+ RQ.forEach(r=>put('r'+r.id,{lat:r.pickup.lat,lng:r.pickup.lng},pickI()));
+ box.innerHTML=RQ.length?RQ.map(r=>`<div class="card"><div class="of"><span onclick="viewUser('${r.pax}','pax')">${avt(r.paxPhoto,r.paxName,50)}</span><div class="t"><b>${esc(r.paxName)}</b><span class="rr">${stars5(r.paxRating||0,12)}<span class="mm">${r.paxRN?(+r.paxRating).toFixed(2)+' ('+r.paxRN+')':'New'}</span></span></div><span class="pr">${money(r.price)}</span></div>
+ <p class="m">${ic('pin',14)} ${esc(r.pickup.name)} → ${esc(r.drop.name)}<br>${r.km} km trip · ${r.d.toFixed(1)} km from you${r.auto?' · <span class="tg">AUTO-ACCEPT</span>':''}${r.type==='c2c'?' · <span class="tg">CITY TO CITY</span>':''}${r.note?'<br>'+ic('note',14)+' '+esc(r.note):''}</p>
+ ${SENT[r.id]?`<p class="m"><b>Offer of ${money(SENT[r.id])} sent. Waiting for passenger…</b></p>`:`<button class="btn" onclick="offer('${r.id}',${r.price})">Accept ${money(r.price)}</button>
+ <div class="pc" style="margin-top:8px"><input class="cin" id="c${r.id}" type="number" step=".5" min="1" placeholder="Your price"><button class="btn d s" style="width:auto;border-radius:12px;height:46px;font-size:15px" onclick="offer('${r.id}',+$('#c${r.id}').value)">Counter</button></div>`}</div>`).join(''):'<p class="m">No requests right now. They appear here instantly.</p>';
+}
+async function offer(id,p){
+ if(!(p>0))return toast('Enter a price first.');
+ const r=RQ.find(x=>x.id===id);
+ await fx(R_.doc(id).collection('offers').doc(me.uid).set({driver:me.uid,name:me.name,phone:me.phone,car:me.car,plate:me.plate,photo:me.photoS||null,rating:MYD&&MYD.n?+MYD.avg.toFixed(2):0,rcount:MYD?MYD.n:0,verified:isVerified(),price:p,eta:r?eta(r.d):null,ts:TS()}));
+ SENT[id]=p;drawReqs();
+}
+
+/* ============ INIT ============ */
+$('#menu').innerHTML=ic('menu',26);
+document.querySelectorAll('#srch .hd button').forEach(b=>b.innerHTML=ic('chevL',26));
+document.querySelectorAll('.mapbtn svg').forEach(s=>s.outerHTML=ic('pin',24));
+$('#pgback').innerHTML=ic('chevL',26);
+if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 applyTheme(lsG('ad_theme')||'dark');
 </script>
 </body></html>
